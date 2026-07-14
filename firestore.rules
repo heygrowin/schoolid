@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /visits/{document} {
+      // Allows anyone to read, create, update, and delete visits.
+      // Suitable for testing. For production, consider adding authentication controls.
+      allow read, write: if true;
+    }
+  }
+}
