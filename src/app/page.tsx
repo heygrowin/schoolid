@@ -330,17 +330,27 @@ export default function Home() {
       {selectedVisit ? (
         /* DETAIL PAGE / WORKFLOW VIEW */
         <div className="details-container">
-          <button 
-            className="btn btn-secondary" 
-            style={{ width: 'auto', padding: '8px 12px', fontSize: '13px', marginBottom: '20px' }}
-            onClick={() => {
-              setSelectedVisit(null);
-              setIsApproving(false);
-              setIsRejecting(false);
-            }}
-          >
-            <ChevronLeft size={16} /> Back to List
-          </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <button 
+              className="btn btn-secondary" 
+              style={{ width: 'auto', padding: '8px 12px', fontSize: '13px' }}
+              onClick={() => {
+                setSelectedVisit(null);
+                setIsApproving(false);
+                setIsRejecting(false);
+              }}
+            >
+              <ChevronLeft size={16} /> Back to List
+            </button>
+
+            <button 
+              className="btn btn-danger" 
+              style={{ width: 'auto', padding: '8px 12px', fontSize: '13px', backgroundColor: 'transparent', border: '1px solid var(--rejected)', color: 'var(--rejected)' }}
+              onClick={() => handleDeleteVisit(selectedVisit.id)}
+            >
+              Delete Entry
+            </button>
+          </div>
 
           {/* School Name & Current Status Banner */}
           <div className="details-header">
@@ -679,20 +689,13 @@ export default function Home() {
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: '12px', marginTop: '8px', marginBottom: '24px' }}>
+              <div style={{ marginTop: '8px', marginBottom: '24px' }}>
                 <button 
                   className="btn btn-primary" 
                   onClick={() => setIsApproving(true)}
-                  style={{ flex: 1 }}
+                  style={{ width: '100%' }}
                 >
                   <Edit size={16} /> Edit Details
-                </button>
-                <button 
-                  className="btn btn-danger" 
-                  onClick={() => handleDeleteVisit(selectedVisit.id)}
-                  style={{ width: 'auto', backgroundColor: 'transparent', border: '1px solid var(--rejected)', color: 'var(--rejected)' }}
-                >
-                  Delete
                 </button>
               </div>
             </div>

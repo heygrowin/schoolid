@@ -24,6 +24,8 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
+import PasswordProtection from "@/components/PasswordProtection";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -32,7 +34,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
-        {children}
+        <PasswordProtection>
+          {children}
+        </PasswordProtection>
       </body>
     </html>
   );
