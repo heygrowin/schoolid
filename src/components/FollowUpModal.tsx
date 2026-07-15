@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
+import { Language, translations } from '@/lib/translations';
 
 interface FollowUpModalProps {
   isOpen: boolean;
@@ -10,14 +11,8 @@ interface FollowUpModalProps {
   initialDate?: string;
   initialAction?: string;
   initialNotes?: string;
+  lang: Language;
 }
-
-const PRESET_ACTIONS = [
-  'Call Back',
-  'Re-visit School',
-  'Drop Sample Kit',
-  'Send Price Quote',
-];
 
 export default function FollowUpModal({
   isOpen,
@@ -26,9 +21,13 @@ export default function FollowUpModal({
   initialDate,
   initialAction,
   initialNotes,
+  lang = 'en',
 }: FollowUpModalProps) {
+  const t = translations[lang];
+  const presetActions: readonly string[] = t.presetActionsList;
+
   const [date, setDate] = useState('');
-  const [action, setAction] = useState('Call Back');
+  const [action, setAction] = useState<string>(presetActions[0]);
   const [customAction, setCustomAction] = useState('');
   const [isCustomAction, setIsCustomAction] = useState(false);
   const [notes, setNotes] = useState('');
@@ -44,7 +43,7 @@ export default function FollowUpModal({
       }
 
       if (initialAction) {
-        if (PRESET_ACTIONS.includes(initialAction)) {
+        if (presetActions.includes(initialAction)) {
           setAction(initialAction);
           setIsCustomAction(false);
         } else {
@@ -53,13 +52,13 @@ export default function FollowUpModal({
           setIsCustomAction(true);
         }
       } else {
-        setAction('Call Back');
+        setAction(presetActions[0]);
         setIsCustomAction(false);
       }
 
       setNotes(initialNotes || '');
     }
-  }, [isOpen, initialDate, initialAction, initialNotes]);
+  }, [isOpen, initialDate, initialAction, initialNotes, presetActions]);
 
   if (!isOpen) return null;
 
@@ -77,7 +76,7 @@ export default function FollowUpModal({
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h3 className="form-title" style={{ margin: 0 }}>
-            {initialDate ? 'Reschedule Follow-Up' : 'Schedule Follow-Up'}
+            {initialDate ? t.rescheduleFollowUp : t.scheduleFollowUp}
           </h3>
           <button 
             onClick={onClose}
@@ -90,7 +89,7 @@ export default function FollowUpModal({
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div className="form-group">
-            <label className="form-label" htmlFor="followup-date">Follow-Up Date</label>
+            <label className="form-label" htmlFor="followup-date">{t.followUpDate}</label>
             <input
               id="followup-date"
               type="date"
@@ -102,9 +101,9 @@ export default function FollowUpModal({
           </div>
 
           <div className="form-group">
-            <label className="form-label">Next Action Category</label>
+            <label className="form-label">{t.nextActionCategory}</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
-              {PRESET_ACTIONS.map((preset) => (
+              {presetActions.map((preset) => (
                 <button
                   key={preset}
                   type="button"
@@ -142,7 +141,7 @@ export default function FollowUpModal({
                   setIsCustomAction(true);
                 }}
               >
-                Custom Action...
+                {t.customAction}
               </button>
             </div>
 
@@ -150,7 +149,7 @@ export default function FollowUpModal({
               <input
                 type="text"
                 className="form-input"
-                placeholder="Type custom action..."
+                placeholder={t.customActionPlaceholder}
                 required
                 value={customAction}
                 onChange={(e) => setCustomAction(e.target.value)}
@@ -160,12 +159,12 @@ export default function FollowUpModal({
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="followup-notes">Follow-Up Notes / Reminders</label>
+            <label className="form-label" htmlFor="followup-notes">{t.followUpNotes}</label>
             <textarea
               id="followup-notes"
               className="form-input"
               style={{ minHeight: '80px', resize: 'vertical' }}
-              placeholder="e.g. Ask for card quantities, call after 2 PM..."
+              placeholder={t.followUpNotesPlaceholder}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
             />
@@ -173,7 +172,7 @@ export default function FollowUpModal({
 
           <div className="form-row" style={{ marginTop: '16px' }}>
             <button type="button" className="btn btn-secondary" onClick={onClose}>
-              Cancel
+              {t.cancel}
             </button>
             <button 
               type="submit" 
@@ -181,7 +180,7 @@ export default function FollowUpModal({
               disabled={!date || (isCustomAction && !customAction.trim())}
               style={{ opacity: date && (!isCustomAction || customAction.trim()) ? 1 : 0.6 }}
             >
-              {initialDate ? 'Update Follow-Up' : 'Schedule Action'}
+              {initialDate ? t.updateFollowUp : t.scheduleAction}
             </button>
           </div>
         </form>

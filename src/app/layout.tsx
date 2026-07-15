@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "School Visit Tracker",
-  description: "Track school visits, approvals, rejections, and details on-the-go.",
+  title: "ACL ID Manage",
+  description: "Manage client visits, schedules, and details on-the-go.",
 };
 
 export const viewport: Viewport = {

@@ -2,6 +2,7 @@ import {
   collection, 
   getDocs, 
   addDoc, 
+  setDoc,
   updateDoc, 
   deleteDoc, 
   doc, 
@@ -17,6 +18,7 @@ export interface SchoolVisit {
   city?: string;
   visitDate: string;
   notes?: string;
+  range?: string;
   status: 'Pending' | 'Approved' | 'Rejected' | 'FollowUp';
   rejectionReason?: string;
   followUpDate?: string;
@@ -92,6 +94,25 @@ const saveLocalVisits = (visits: SchoolVisit[]) => {
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(visits));
 };
 
+const LOCAL_CITIES_KEY = 'acl_cities';
+
+const getLocalCities = (): string[] => {
+  if (typeof window === 'undefined') return [];
+  const raw = localStorage.getItem(LOCAL_CITIES_KEY);
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error('Failed to parse local storage cities:', e);
+    return [];
+  }
+};
+
+const saveLocalCities = (cities: string[]) => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(LOCAL_CITIES_KEY, JSON.stringify(cities));
+};
+
 export const dbService = {
   isCloudConnected(): boolean {
     return isFirebaseConfigured && db !== null;
@@ -131,17 +152,31 @@ export const dbService = {
 
   async saveVisit(visitData: Omit<SchoolVisit, 'id' | 'createdAt' | 'updatedAt'>): Promise<SchoolVisit> {
     const now = new Date().toISOString();
+    const isOnline = typeof window !== 'undefined' ? navigator.onLine : true;
     
     if (this.isCloudConnected() && db) {
       try {
         const cleanedData = cleanUndefined(visitData);
-        const docRef = await addDoc(collection(db, 'visits'), {
+        const docRef = doc(collection(db, 'visits'));
+        const newId = docRef.id;
+        
+        const dataToSave = {
           ...cleanedData,
           createdAt: now,
           updatedAt: now,
-        });
+        };
+
+        if (isOnline) {
+          await setDoc(docRef, dataToSave);
+        } else {
+          // If offline, save in background without awaiting so the UI doesn't hang
+          setDoc(docRef, dataToSave).catch((error) => {
+            console.error('Background Firestore save error:', error);
+          });
+        }
+
         return {
-          id: docRef.id,
+          id: newId,
           ...visitData,
           createdAt: now,
           updatedAt: now,
@@ -151,7 +186,7 @@ export const dbService = {
       }
     }
 
-    // Local Storage save
+    // Local Storage save fallback
     const localVisits = getLocalVisits();
     const newVisit: SchoolVisit = {
       id: 'local_' + Math.random().toString(36).substring(2, 11),
@@ -166,22 +201,32 @@ export const dbService = {
 
   async updateVisit(id: string, updates: Partial<SchoolVisit>): Promise<void> {
     const now = new Date().toISOString();
+    const isOnline = typeof window !== 'undefined' ? navigator.onLine : true;
 
     if (this.isCloudConnected() && db && !id.startsWith('local_')) {
       try {
         const docRef = doc(db, 'visits', id);
         const cleanedUpdates = cleanUndefined(updates);
-        await updateDoc(docRef, {
+        const dataToUpdate = {
           ...cleanedUpdates,
           updatedAt: now,
-        });
+        };
+
+        if (isOnline) {
+          await updateDoc(docRef, dataToUpdate);
+        } else {
+          // If offline, update in background without awaiting so the UI doesn't hang
+          updateDoc(docRef, dataToUpdate).catch((error) => {
+            console.error('Background Firestore update error:', error);
+          });
+        }
         return;
       } catch (error) {
         console.error('Firestore update error, updating locally:', error);
       }
     }
 
-    // Local Storage update
+    // Local Storage update fallback
     const localVisits = getLocalVisits();
     const index = localVisits.findIndex(v => v.id === id);
     if (index !== -1) {
@@ -195,19 +240,69 @@ export const dbService = {
   },
 
   async deleteVisit(id: string): Promise<void> {
+    const isOnline = typeof window !== 'undefined' ? navigator.onLine : true;
+
     if (this.isCloudConnected() && db && !id.startsWith('local_')) {
       try {
         const docRef = doc(db, 'visits', id);
-        await deleteDoc(docRef);
+        if (isOnline) {
+          await deleteDoc(docRef);
+        } else {
+          // If offline, delete in background without awaiting so the UI doesn't hang
+          deleteDoc(docRef).catch((error) => {
+            console.error('Background Firestore delete error:', error);
+          });
+        }
         return;
       } catch (error) {
         console.error('Firestore delete error, deleting locally:', error);
       }
     }
 
-    // Local Storage delete
+    // Local Storage delete fallback
     const localVisits = getLocalVisits();
     const filtered = localVisits.filter(v => v.id !== id);
     saveLocalVisits(filtered);
+  },
+
+  async getCities(): Promise<string[]> {
+    if (this.isCloudConnected() && db) {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'cities'));
+        const cities: string[] = [];
+        querySnapshot.forEach((docSnap) => {
+          const name = docSnap.data().name;
+          if (name) cities.push(name);
+        });
+        return cities.sort();
+      } catch (error) {
+        console.error('Firestore cities read error, falling back to local storage:', error);
+        return getLocalCities();
+      }
+    } else {
+      return getLocalCities();
+    }
+  },
+
+  async saveCity(cityName: string): Promise<void> {
+    const name = cityName.trim();
+    if (!name) return;
+    
+    // Add to Local Storage fallback
+    const localCities = getLocalCities();
+    if (!localCities.includes(name)) {
+      localCities.push(name);
+      saveLocalCities(localCities.sort());
+    }
+
+    if (this.isCloudConnected() && db) {
+      try {
+        const cityId = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const docRef = doc(db, 'cities', cityId);
+        await setDoc(docRef, { name });
+      } catch (error) {
+        console.error('Firestore saveCity error:', error);
+      }
+    }
   }
 };

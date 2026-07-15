@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Plus, Search, Calendar, MapPin, Phone, Mail, BookOpen, 
   Layers, Palette, Clipboard, CheckCircle2, AlertCircle, 
-  ChevronLeft, Edit, Wifi, WifiOff, School, AlertTriangle
+  ChevronLeft, Edit, Wifi, WifiOff, School, AlertTriangle, BarChart3
 } from 'lucide-react';
 import { dbService, SchoolVisit } from '@/lib/db';
 import BottomNav from '@/components/BottomNav';
@@ -13,10 +13,31 @@ import RejectionModal from '@/components/RejectionModal';
 import ApprovalForm from '@/components/ApprovalForm';
 import FollowUpModal from '@/components/FollowUpModal';
 
+import { Language, translations } from '@/lib/translations';
+
 export default function Home() {
-  const [currentTab, setTab] = useState<'dashboard' | 'visits' | 'schools'>('dashboard');
+  const [currentTab, setTab] = useState<'dashboard' | 'visits' | 'schools' | 'analysis'>('dashboard');
+  const [language, setLanguage] = useState<Language>('en');
   const [visits, setVisits] = useState<SchoolVisit[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const savedLang = localStorage.getItem('acl_lang') as Language;
+    if (savedLang === 'en' || savedLang === 'hi') {
+      setLanguage(savedLang);
+    }
+  }, []);
+
+  const changeLanguage = (lang: Language) => {
+    setLanguage(lang);
+    localStorage.setItem('acl_lang', lang);
+  };
+
+  const t = translations[language];
+  
+  const recentVisits = [...visits]
+    .sort((a, b) => new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime())
+    .slice(0, 3);
   
   // Selection & workflow states
   const [selectedVisit, setSelectedVisit] = useState<SchoolVisit | null>(null);
@@ -36,6 +57,12 @@ export default function Home() {
     return today.toISOString().split('T')[0];
   });
   const [newNotes, setNewNotes] = useState('');
+  const [newRange, setNewRange] = useState('');
+
+  // City picker states
+  const [customCities, setCustomCities] = useState<string[]>([]);
+  const [isCityPickerOpen, setIsCityPickerOpen] = useState(false);
+  const [newCityNameInput, setNewCityNameInput] = useState('');
 
   // Search and Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -153,6 +180,7 @@ export default function Home() {
       city: newCity.trim() || undefined,
       visitDate: newVisitDate,
       notes: newNotes.trim() || undefined,
+      range: newRange.trim() || undefined,
       status: 'Pending' as const,
     };
 
@@ -166,6 +194,7 @@ export default function Home() {
       const today = new Date();
       setNewVisitDate(today.toISOString().split('T')[0]);
       setNewNotes('');
+      setNewRange('');
       setIsAddingVisit(false);
       
       // Go to visits tab to see it
@@ -261,14 +290,25 @@ export default function Home() {
   const rejectedSchools = visits.filter((v) => v.status === 'Rejected').length;
   const todayVisits = visits.filter((v) => isDateToday(v.visitDate)).length;
 
+  // City calculations for analysis
+  const cityCounts: { [key: string]: number } = {};
+  visits.forEach(v => {
+    if (v.city) {
+      const city = v.city.trim();
+      cityCounts[city] = (cityCounts[city] || 0) + 1;
+    }
+  });
+  const sortedCities = Object.entries(cityCounts).sort((a, b) => b[1] - a[1]);
+
   // Filtering lists
   const filteredVisits = visits.filter((v) => {
-    // 1. Search Query filter (matches School Name, Principal, or Status)
+    // 1. Search Query filter (matches School Name, Principal, Status, City, or Range)
     const query = searchQuery.toLowerCase().trim();
     const matchesSearch = 
       v.schoolName.toLowerCase().includes(query) ||
       (v.schoolDetails?.principalName && v.schoolDetails.principalName.toLowerCase().includes(query)) ||
       v.status.toLowerCase().includes(query) ||
+      (v.range && v.range.toLowerCase().includes(query)) ||
       (v.city && v.city.toLowerCase().includes(query));
 
     // 2. Status Tab Filter
@@ -282,6 +322,7 @@ export default function Home() {
     return (
       v.schoolName.toLowerCase().includes(query) ||
       (v.schoolDetails?.principalName && v.schoolDetails.principalName.toLowerCase().includes(query)) ||
+      (v.range && v.range.toLowerCase().includes(query)) ||
       (v.city && v.city.toLowerCase().includes(query))
     );
   });
@@ -291,7 +332,13 @@ export default function Home() {
       {/* App Header */}
       <header className="app-header">
         <div>
-          <span className="app-title">Antigravity Visitz</span>
+          <span 
+            className="app-title" 
+            style={{ cursor: 'pointer' }}
+            onClick={() => { setTab('dashboard'); setSearchQuery(''); setSelectedVisit(null); }}
+          >
+            ACL ID Manage
+          </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           {!isCloudConnected ? (
@@ -340,7 +387,7 @@ export default function Home() {
                 setIsRejecting(false);
               }}
             >
-              <ChevronLeft size={16} /> Back to List
+              <ChevronLeft size={16} /> {t.backToList}
             </button>
 
             <button 
@@ -348,7 +395,7 @@ export default function Home() {
               style={{ width: 'auto', padding: '8px 12px', fontSize: '13px', backgroundColor: 'transparent', border: '1px solid var(--rejected)', color: 'var(--rejected)' }}
               onClick={() => handleDeleteVisit(selectedVisit.id)}
             >
-              Delete Entry
+              {t.deleteEntry}
             </button>
           </div>
 
@@ -357,7 +404,7 @@ export default function Home() {
             <h2 style={{ fontSize: '24px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
               {selectedVisit.schoolName}
             </h2>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
               <span className={`badge ${
                 selectedVisit.status === 'Approved' 
                   ? 'badge-approved' 
@@ -368,16 +415,21 @@ export default function Home() {
                       : 'badge-pending'
               }`}>
                 {selectedVisit.status === 'Approved' 
-                  ? 'Approved ✅' 
+                  ? (language === 'en' ? 'Confirmed ✅' : 'पुष्टि की गई ✅')
                   : selectedVisit.status === 'Rejected' 
-                    ? 'Rejected ❌' 
+                    ? (language === 'en' ? 'Declined ❌' : 'अस्वीकार किया गया ❌') 
                     : selectedVisit.status === 'FollowUp'
-                      ? 'Follow-Up 🔵'
-                      : 'Pending 🟡'}
+                      ? (language === 'en' ? 'Follow-Up 🔵' : 'फॉलो-अप 🔵')
+                      : (language === 'en' ? 'Pending 🟡' : 'लंबित 🟡')}
               </span>
               {selectedVisit.city && (
                 <span style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                   <MapPin size={12} /> {selectedVisit.city}
+                </span>
+              )}
+              {selectedVisit.range && (
+                <span style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: '4px', borderLeft: '1px solid var(--border-color)', paddingLeft: '8px' }}>
+                  {language === 'en' ? 'Range' : 'रेंज'}: {selectedVisit.range}
                 </span>
               )}
             </div>
@@ -389,7 +441,11 @@ export default function Home() {
             <div className="section-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ textAlign: 'center', padding: '10px 0' }}>
                 <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-                  Visit scheduled for <strong>{formatDate(selectedVisit.visitDate)}</strong>.
+                  {language === 'en' ? (
+                    <>Visit scheduled for <strong>{formatDate(selectedVisit.visitDate)}</strong>.</>
+                  ) : (
+                    <><strong>{formatDate(selectedVisit.visitDate)}</strong> के लिए मुलाकात निर्धारित है।</>
+                  )}
                 </span>
                 {selectedVisit.notes && (
                   <p style={{ fontStyle: 'italic', margin: '8px 0 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>
@@ -404,14 +460,14 @@ export default function Home() {
                     onClick={() => setIsRejecting(true)}
                     style={{ height: '56px', fontSize: '16px' }}
                   >
-                    ❌ Reject
+                    ❌ {t.decline}
                   </button>
                   <button 
                     className="btn btn-success" 
                     onClick={() => setIsApproving(true)}
                     style={{ height: '56px', fontSize: '16px' }}
                   >
-                    ✅ Approve
+                    ✅ {t.confirm}
                   </button>
                 </div>
                 <button 
@@ -420,7 +476,7 @@ export default function Home() {
                   onClick={() => setIsSchedulingFollowUp(true)}
                   style={{ height: '56px', fontSize: '16px', backgroundColor: 'var(--followup-bg)', color: 'var(--followup)', border: '1px solid var(--border-color)' }}
                 >
-                  ⏰ Schedule Follow-Up
+                  ⏰ {t.scheduleFollowUp}
                 </button>
               </div>
             </div>
@@ -429,11 +485,12 @@ export default function Home() {
           {isApproving && (
             /* Detailed Approval Form */
             <div className="section-card" style={{ padding: '16px 12px' }}>
-              <h3 className="form-title" style={{ marginTop: 0 }}>School Registration Form</h3>
+              <h3 className="form-title" style={{ marginTop: 0 }}>{t.clientRegistrationForm}</h3>
               <ApprovalForm
                 visit={selectedVisit}
                 onSave={handleApproveSave}
                 onCancel={() => setIsApproving(false)}
+                lang={language}
               />
             </div>
           )}
@@ -441,22 +498,22 @@ export default function Home() {
           {selectedVisit.status === 'FollowUp' && !isApproving && (
             /* Follow-Up details view */
             <div className="detail-section" style={{ borderLeft: '4px solid var(--followup)' }}>
-              <div className="detail-section-title" style={{ color: 'var(--followup)' }}>Follow-Up Details</div>
+              <div className="detail-section-title" style={{ color: 'var(--followup)' }}>{language === 'en' ? 'Follow-Up Details' : 'फॉलो-अप विवरण'}</div>
               <div className="detail-row">
-                <span className="detail-label">Scheduled Date</span>
+                <span className="detail-label">{t.scheduledDate}</span>
                 <span className="detail-value" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
                   {formatDate(selectedVisit.followUpDate || '')}
                 </span>
               </div>
               <div className="detail-row">
-                <span className="detail-label">Next Action</span>
+                <span className="detail-label">{t.nextAction}</span>
                 <span className="detail-value" style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
-                  {selectedVisit.followUpAction || 'No action specified'}
+                  {selectedVisit.followUpAction || (language === 'en' ? 'No action specified' : 'कोई कार्रवाई निर्दिष्ट नहीं')}
                 </span>
               </div>
               {selectedVisit.followUpNotes && (
                 <div className="detail-row">
-                  <span className="detail-label">Notes & Reminders</span>
+                  <span className="detail-label">{t.notesReminders}</span>
                   <span className="detail-value" style={{ fontStyle: 'italic' }}>
                     "{selectedVisit.followUpNotes}"
                   </span>
@@ -470,14 +527,14 @@ export default function Home() {
                     onClick={() => setIsRejecting(true)}
                     style={{ height: '48px', fontSize: '14px' }}
                   >
-                    ❌ Reject
+                    ❌ {t.decline}
                   </button>
                   <button 
                     className="btn btn-success" 
                     onClick={() => setIsApproving(true)}
                     style={{ height: '48px', fontSize: '14px' }}
                   >
-                    ✅ Approve School
+                    ✅ {t.confirmClient}
                   </button>
                 </div>
                 <button 
@@ -485,7 +542,7 @@ export default function Home() {
                   onClick={() => setIsSchedulingFollowUp(true)}
                   style={{ height: '48px', fontSize: '14px' }}
                 >
-                  Reschedule Follow-Up
+                  {t.rescheduleFollowUp}
                 </button>
               </div>
             </div>
@@ -494,15 +551,15 @@ export default function Home() {
           {selectedVisit.status === 'Rejected' && (
             /* Rejected summary details */
             <div className="detail-section" style={{ borderLeft: '4px solid var(--rejected)' }}>
-              <div className="detail-section-title" style={{ color: 'var(--rejected)' }}>Rejection Audit</div>
+              <div className="detail-section-title" style={{ color: 'var(--rejected)' }}>{t.declineSummary}</div>
               <div className="detail-row">
-                <span className="detail-label">Rejection Reason</span>
+                <span className="detail-label">{t.declineReason}</span>
                 <span className="detail-value" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  {selectedVisit.rejectionReason || 'No reason specified'}
+                  {selectedVisit.rejectionReason || (language === 'en' ? 'No reason specified' : 'कोई कारण निर्दिष्ट नहीं')}
                 </span>
               </div>
               <div className="detail-row">
-                <span className="detail-label">Visited Date</span>
+                <span className="detail-label">{language === 'en' ? 'Visited Date' : 'मुलाकात की तिथि'}</span>
                 <span className="detail-value">{formatDate(selectedVisit.visitDate)}</span>
               </div>
               <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
@@ -513,7 +570,7 @@ export default function Home() {
                     setIsRejecting(true);
                   }}
                 >
-                  Edit Reason
+                  {t.editReason}
                 </button>
                 <button 
                   className="btn btn-primary" 
@@ -522,7 +579,7 @@ export default function Home() {
                     setIsApproving(true);
                   }}
                 >
-                  Approve Instead
+                  {t.confirmInstead}
                 </button>
               </div>
             </div>
@@ -532,13 +589,13 @@ export default function Home() {
             /* Approved detailed specifications display */
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div className="detail-section">
-                <div className="detail-section-title">Principal Details</div>
+                <div className="detail-section-title">{language === 'en' ? 'Principal Details' : 'प्रिंसिपल का विवरण'}</div>
                 <div className="detail-row">
-                  <span className="detail-label">Name</span>
-                  <span className="detail-value">{selectedVisit.schoolDetails?.principalName || 'Not entered'}</span>
+                  <span className="detail-label">{language === 'en' ? 'Name' : 'नाम'}</span>
+                  <span className="detail-value">{selectedVisit.schoolDetails?.principalName || (language === 'en' ? 'Not entered' : 'दर्ज नहीं किया')}</span>
                 </div>
                 <div className="detail-row">
-                  <span className="detail-label">Mobile</span>
+                  <span className="detail-label">{language === 'en' ? 'Mobile' : 'मोबाइल'}</span>
                   {selectedVisit.schoolDetails?.principalMobile ? (
                     <a 
                       href={`tel:${selectedVisit.schoolDetails.principalMobile}`}
@@ -548,12 +605,12 @@ export default function Home() {
                       <Phone size={14} /> {selectedVisit.schoolDetails.principalMobile}
                     </a>
                   ) : (
-                    <span className="detail-value">Not entered</span>
+                    <span className="detail-value">{language === 'en' ? 'Not entered' : 'दर्ज नहीं किया'}</span>
                   )}
                 </div>
                 {selectedVisit.schoolDetails?.principalEmail && (
                   <div className="detail-row">
-                    <span className="detail-label">Email</span>
+                    <span className="detail-label">{language === 'en' ? 'Email' : 'ईमेल'}</span>
                     <a 
                       href={`mailto:${selectedVisit.schoolDetails.principalEmail}`}
                       className="detail-value"
@@ -565,7 +622,7 @@ export default function Home() {
                 )}
                 {selectedVisit.schoolDetails?.address && (
                   <div className="detail-row">
-                    <span className="detail-label">Address</span>
+                    <span className="detail-label">{t.address}</span>
                     <span className="detail-value">{selectedVisit.schoolDetails.address}</span>
                   </div>
                 )}
@@ -573,14 +630,14 @@ export default function Home() {
 
               {selectedVisit.idIncharge && (selectedVisit.idIncharge.name || selectedVisit.idIncharge.mobile) && (
                 <div className="detail-section">
-                  <div className="detail-section-title">ID Incharge</div>
+                  <div className="detail-section-title">{t.incharge}</div>
                   <div className="detail-row">
-                    <span className="detail-label">Name</span>
-                    <span className="detail-value">{selectedVisit.idIncharge.name || 'Not entered'}</span>
+                    <span className="detail-label">{language === 'en' ? 'Name' : 'नाम'}</span>
+                    <span className="detail-value">{selectedVisit.idIncharge.name || (language === 'en' ? 'Not entered' : 'दर्ज नहीं किया')}</span>
                   </div>
                   {selectedVisit.idIncharge.mobile && (
                     <div className="detail-row">
-                      <span className="detail-label">Mobile</span>
+                      <span className="detail-label">{language === 'en' ? 'Mobile' : 'मोबाइल'}</span>
                       <a 
                         href={`tel:${selectedVisit.idIncharge.mobile}`}
                         className="detail-value"
@@ -592,7 +649,7 @@ export default function Home() {
                   )}
                   {selectedVisit.idIncharge.email && (
                     <div className="detail-row">
-                      <span className="detail-label">Email</span>
+                      <span className="detail-label">{language === 'en' ? 'Email' : 'ईमेल'}</span>
                       <a 
                         href={`mailto:${selectedVisit.idIncharge.email}`}
                         className="detail-value"
@@ -607,14 +664,14 @@ export default function Home() {
 
               {selectedVisit.reception && (selectedVisit.reception.name || selectedVisit.reception.mobile) && (
                 <div className="detail-section">
-                  <div className="detail-section-title">Reception</div>
+                  <div className="detail-section-title">{t.reception}</div>
                   <div className="detail-row">
-                    <span className="detail-label">Name</span>
-                    <span className="detail-value">{selectedVisit.reception.name || 'Not entered'}</span>
+                    <span className="detail-label">{language === 'en' ? 'Name' : 'नाम'}</span>
+                    <span className="detail-value">{selectedVisit.reception.name || (language === 'en' ? 'Not entered' : 'दर्ज नहीं किया')}</span>
                   </div>
                   {selectedVisit.reception.mobile && (
                     <div className="detail-row">
-                      <span className="detail-label">Mobile</span>
+                      <span className="detail-label">{language === 'en' ? 'Mobile' : 'मोबाइल'}</span>
                       <a 
                         href={`tel:${selectedVisit.reception.mobile}`}
                         className="detail-value"
@@ -626,7 +683,7 @@ export default function Home() {
                   )}
                   {selectedVisit.reception.email && (
                     <div className="detail-row">
-                      <span className="detail-label">Email</span>
+                      <span className="detail-label">{language === 'en' ? 'Email' : 'ईमेल'}</span>
                       <a 
                         href={`mailto:${selectedVisit.reception.email}`}
                         className="detail-value"
@@ -640,10 +697,10 @@ export default function Home() {
               )}
 
               <div className="detail-section">
-                <div className="detail-section-title">Configurations</div>
+                <div className="detail-section-title">{language === 'en' ? 'Configurations' : 'कॉन्फ़िगरेशन'}</div>
                 {selectedVisit.classes && (
                   <div className="detail-row" style={{ marginBottom: '16px' }}>
-                    <span className="detail-label">Classes Span</span>
+                    <span className="detail-label">{language === 'en' ? 'Classes Span' : 'कक्षा विस्तार'}</span>
                     <span className="detail-value" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                       <BookOpen size={16} style={{ color: 'var(--primary)' }} /> {selectedVisit.classes.from} - {selectedVisit.classes.to}
                     </span>
@@ -652,14 +709,18 @@ export default function Home() {
 
                 {selectedVisit.cardTypes && selectedVisit.cardTypes.length > 0 && (
                   <div className="detail-row" style={{ marginBottom: '16px' }}>
-                    <span className="detail-label">Card Type Required</span>
-                    <span className="detail-value">{selectedVisit.cardTypes.join(', ')}</span>
+                    <span className="detail-label">{t.cardTypeRequired}</span>
+                    <span className="detail-value">
+                      {selectedVisit.cardTypes.map(type => 
+                        type === 'Student' ? t.student : type === 'Staff' ? t.staff : type === 'Bus' ? t.bus : type === 'Other' ? t.other : type
+                      ).join(', ')}
+                    </span>
                   </div>
                 )}
 
                 {selectedVisit.sections && selectedVisit.sections.length > 0 && (
                   <div className="detail-row" style={{ marginBottom: '16px' }}>
-                    <span className="detail-label">Sections</span>
+                    <span className="detail-label">{t.sections}</span>
                     <div className="tag-list" style={{ marginTop: '4px' }}>
                       {selectedVisit.sections.map((sec) => (
                         <span key={sec} className="tag">{sec}</span>
@@ -670,7 +731,7 @@ export default function Home() {
 
                 {selectedVisit.houses && selectedVisit.houses.length > 0 && (
                   <div className="detail-row">
-                    <span className="detail-label">Houses</span>
+                    <span className="detail-label">{t.houses}</span>
                     <div className="tag-list" style={{ marginTop: '4px' }}>
                       {selectedVisit.houses.map((house) => (
                         <span key={house} className="tag">{house}</span>
@@ -682,7 +743,7 @@ export default function Home() {
 
               {selectedVisit.additionalNotes && (
                 <div className="detail-section">
-                  <div className="detail-section-title">Notes</div>
+                  <div className="detail-section-title">{t.notes}</div>
                   <div style={{ color: 'var(--text-primary)', fontSize: '14px', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
                     {selectedVisit.additionalNotes}
                   </div>
@@ -695,7 +756,7 @@ export default function Home() {
                   onClick={() => setIsApproving(true)}
                   style={{ width: '100%' }}
                 >
-                  <Edit size={16} /> Edit Details
+                  <Edit size={16} /> {language === 'en' ? 'Edit Details' : 'विवरण संपादित करें'}
                 </button>
               </div>
             </div>
@@ -706,6 +767,7 @@ export default function Home() {
             isOpen={isRejecting}
             onClose={() => setIsRejecting(false)}
             onSave={handleRejectSave}
+            lang={language}
           />
         </div>
       ) : (
@@ -713,21 +775,23 @@ export default function Home() {
         <>
           {currentTab === 'dashboard' && (
             <div style={{ padding: '20px' }}>
-              <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '20px', color: 'var(--text-primary)' }}>Dashboard</h2>
+              <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '20px', color: 'var(--text-primary)' }}>{t.dashboard}</h2>
               
               {/* Stat Grid */}
               <div className="metrics-grid">
                 <MetricCard 
-                  title="Total Schools" 
+                  title={t.totalClients} 
                   value={totalVisits} 
-                  icon={School} 
                   color="primary"
-                  fullWidth
+                  onClick={() => {
+                    setTab('visits');
+                    setStatusFilter('All');
+                    setSearchQuery('');
+                  }}
                 />
                 <MetricCard 
-                  title="Pending Visits" 
+                  title={t.pendingClients} 
                   value={pendingVisits} 
-                  icon={AlertTriangle} 
                   color="pending"
                   onClick={() => {
                     setTab('visits');
@@ -735,9 +799,8 @@ export default function Home() {
                   }}
                 />
                 <MetricCard 
-                  title="Follow-Ups" 
+                  title={t.followUps} 
                   value={followUpVisits} 
-                  icon={Calendar} 
                   color="info"
                   onClick={() => {
                     setTab('visits');
@@ -745,18 +808,16 @@ export default function Home() {
                   }}
                 />
                 <MetricCard 
-                  title="Approved Schools" 
+                  title={t.confirmedClients} 
                   value={approvedSchools} 
-                  icon={CheckCircle2} 
                   color="approved"
                   onClick={() => {
                     setTab('schools');
                   }}
                 />
                 <MetricCard 
-                  title="Rejected Schools" 
+                  title={t.declinedClients} 
                   value={rejectedSchools} 
-                  icon={AlertCircle} 
                   color="rejected"
                   onClick={() => {
                     setTab('visits');
@@ -764,11 +825,9 @@ export default function Home() {
                   }}
                 />
                 <MetricCard 
-                  title="Today's Visits" 
+                  title={t.todaysClients} 
                   value={todayVisits} 
-                  icon={Calendar} 
                   color="info"
-                  fullWidth
                   onClick={() => {
                     setTab('visits');
                     setStatusFilter('All');
@@ -779,22 +838,117 @@ export default function Home() {
                 />
               </div>
 
-              {/* Today's Schedule Quick view */}
-              <div className="section-card">
-                <h3 className="section-card-title">Today's Visits List</h3>
-                {visits.filter((v) => isDateToday(v.visitDate)).length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {visits
-                      .filter((v) => isDateToday(v.visitDate))
-                      .map((visit) => (
+              {/* Navigation Actions on Landing Page */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <button 
+                    className="btn btn-primary" 
+                    style={{ 
+                      padding: '16px 12px', 
+                      borderRadius: '14px', 
+                      display: 'flex', 
+                      flexDirection: 'column',
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      gap: '8px',
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      height: '90px',
+                      boxShadow: '0 4px 12px rgba(99, 102, 241, 0.2)'
+                    }}
+                    onClick={() => { setTab('visits'); setStatusFilter('All'); setSearchQuery(''); }}
+                  >
+                    <Calendar size={22} />
+                    <span>{t.clientsList}</span>
+                  </button>
+                  
+                  <button 
+                    className="btn" 
+                    style={{ 
+                      padding: '16px 12px', 
+                      borderRadius: '14px', 
+                      display: 'flex', 
+                      flexDirection: 'column',
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      gap: '8px',
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      height: '90px',
+                      backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                      border: '1px solid rgba(16, 185, 129, 0.25)',
+                      color: 'var(--approved)'
+                    }}
+                    onClick={() => { setTab('schools'); setSearchQuery(''); }}
+                  >
+                    <CheckCircle2 size={22} />
+                    <span>{t.confirmedClients}</span>
+                  </button>
+                </div>
+                
+                <button 
+                  className="btn btn-secondary" 
+                  style={{ 
+                    padding: '14px', 
+                    borderRadius: '14px', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    gap: '10px',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    marginTop: '4px',
+                    borderStyle: 'dashed',
+                    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                    borderColor: 'var(--border-color)',
+                    color: 'var(--text-primary)'
+                  }}
+                  onClick={() => setIsAddingVisit(true)}
+                >
+                  <Plus size={18} />
+                  {t.addNewClientVisit}
+                </button>
+
+                <button 
+                  className="btn btn-secondary" 
+                  style={{ 
+                    padding: '14px', 
+                    borderRadius: '14px', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    gap: '10px',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    marginTop: '8px',
+                    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                    borderColor: 'rgba(59, 130, 246, 0.25)',
+                    color: 'var(--followup)'
+                  }}
+                  onClick={() => { setTab('analysis'); setSearchQuery(''); }}
+                >
+                  <BarChart3 size={18} />
+                  {t.detailedClientAnalysis}
+                </button>
+
+                {/* Recent Client Visits Section */}
+                <div style={{ marginTop: '20px' }}>
+                  <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '10px' }}>
+                    {language === 'en' ? 'Recent Client Visits' : 'हाल के ग्राहक दौरे'}
+                  </h3>
+                  {recentVisits.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {recentVisits.map((visit) => (
                         <div 
                           key={visit.id} 
-                          className="visit-card"
-                          style={{ padding: '12px' }}
+                          className={`visit-card card-${visit.status.toLowerCase()}`}
+                          style={{ padding: '12px', borderRadius: '12px' }}
                           onClick={() => setSelectedVisit(visit)}
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontWeight: 600, fontSize: '14px' }}>{visit.schoolName}</span>
+                            <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                              {visit.schoolName}
+                            </span>
                             <span className={`badge ${
                               visit.status === 'Approved' 
                                 ? 'badge-approved' 
@@ -804,17 +958,28 @@ export default function Home() {
                                     ? 'badge-followup'
                                     : 'badge-pending'
                             }`} style={{ fontSize: '10px', padding: '2px 6px' }}>
-                              {visit.status === 'FollowUp' ? 'Follow-Up' : visit.status}
+                              {visit.status === 'Approved' 
+                                ? (language === 'en' ? 'Confirmed ✅' : 'पुष्टि ✅')
+                                : visit.status === 'Rejected' 
+                                  ? (language === 'en' ? 'Declined ❌' : 'अस्वीकृत ❌') 
+                                  : visit.status === 'FollowUp'
+                                    ? (language === 'en' ? 'Follow-Up 🔵' : 'फॉलो-अप 🔵')
+                                    : (language === 'en' ? 'Pending 🟡' : 'लंबित 🟡')}
                             </span>
+                          </div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>{formatDate(visit.visitDate)}</span>
+                            {visit.city && <span>{visit.city}</span>}
                           </div>
                         </div>
                       ))}
-                  </div>
-                ) : (
-                  <div style={{ padding: '16px 0', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
-                    No school visits scheduled for today.
-                  </div>
-                )}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', padding: '12px 0' }}>
+                      {language === 'en' ? 'No recent visits.' : 'कोई हालिया दौरा नहीं।'}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -823,12 +988,22 @@ export default function Home() {
             <>
               {/* Sticky Search bar */}
               <div className="search-container">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <button 
+                    className="btn btn-secondary" 
+                    style={{ width: 'auto', padding: '6px 12px', fontSize: '12px' }} 
+                    onClick={() => { setTab('dashboard'); setSearchQuery(''); }}
+                  >
+                    ← {t.back}
+                  </button>
+                  <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>{t.clientsList}</h3>
+                </div>
                 <div className="search-input-wrapper">
                   <Search className="search-icon" size={18} />
                   <input
                     type="text"
                     className="search-input"
-                    placeholder="Search name, status, or date..."
+                    placeholder={t.searchPlaceholderClients}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
@@ -838,7 +1013,11 @@ export default function Home() {
                 <div style={{ display: 'flex', gap: '8px', marginTop: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
                   {(['All', 'Pending', 'FollowUp', 'Approved', 'Rejected'] as const).map((status) => {
                     let label = status as string;
-                    if (status === 'FollowUp') label = 'Follow-Up';
+                    if (status === 'All') label = language === 'en' ? 'All' : 'सभी';
+                    else if (status === 'Pending') label = language === 'en' ? 'Pending' : 'लंबित';
+                    else if (status === 'FollowUp') label = language === 'en' ? 'Follow-Up' : 'फॉलो-अप';
+                    else if (status === 'Approved') label = language === 'en' ? 'Confirmed' : 'पुष्टि किए गए';
+                    else if (status === 'Rejected') label = language === 'en' ? 'Declined' : 'अस्वीकृत';
                     return (
                       <button
                         key={status}
@@ -864,14 +1043,14 @@ export default function Home() {
               {/* Visits card list */}
               {loading ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
-                  Loading school visits...
+                  {t.loadingClientList}
                 </div>
               ) : filteredVisits.length > 0 ? (
                 <div className="visit-card-list">
                   {filteredVisits.map((visit) => (
                     <div 
                       key={visit.id} 
-                      className="visit-card"
+                      className={`visit-card card-${visit.status.toLowerCase()}`}
                       onClick={() => setSelectedVisit(visit)}
                     >
                       <div className="visit-card-header">
@@ -906,6 +1085,11 @@ export default function Home() {
                           <Calendar size={13} style={{ color: 'var(--primary)' }} />
                           <span>Visit: {formatDate(visit.visitDate)}</span>
                         </div>
+                        {visit.range && (
+                          <div className="visit-card-row" style={{ color: 'var(--primary)', fontSize: '13px', fontWeight: 500 }}>
+                            <span>Range: {visit.range}</span>
+                          </div>
+                        )}
                         {visit.notes && (
                           <div className="visit-card-row" style={{ marginTop: '4px', fontStyle: 'italic', color: 'var(--text-muted)' }}>
                             <span>"{visit.notes}"</span>
@@ -913,12 +1097,12 @@ export default function Home() {
                         )}
                         {visit.status === 'Rejected' && visit.rejectionReason && (
                           <div className="visit-card-row" style={{ color: 'var(--rejected)', fontWeight: 500 }}>
-                            <span>Reason: {visit.rejectionReason}</span>
+                            <span>{t.reason}: {visit.rejectionReason}</span>
                           </div>
                         )}
                         {visit.status === 'FollowUp' && visit.followUpDate && (
                           <div className="visit-card-row" style={{ color: 'var(--followup)', fontWeight: 500 }}>
-                            <span>Action: {visit.followUpAction} ({formatDate(visit.followUpDate)})</span>
+                            <span>{t.action}: {visit.followUpAction} ({formatDate(visit.followUpDate)})</span>
                           </div>
                         )}
                       </div>
@@ -927,7 +1111,7 @@ export default function Home() {
                 </div>
               ) : (
                 <div style={{ textAlign: 'center', padding: '60px 40px', color: 'var(--text-secondary)' }}>
-                  No visit matches your filter or search.
+                  {t.noClientMatch}
                 </div>
               )}
 
@@ -936,7 +1120,7 @@ export default function Home() {
                 <button 
                   className="fab" 
                   onClick={() => setIsAddingVisit(true)}
-                  aria-label="Add new school visit"
+                  aria-label="Add new client visit"
                 >
                   <Plus size={28} />
                 </button>
@@ -948,12 +1132,22 @@ export default function Home() {
             <>
               {/* Sticky Search bar */}
               <div className="search-container">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <button 
+                    className="btn btn-secondary" 
+                    style={{ width: 'auto', padding: '6px 12px', fontSize: '12px' }} 
+                    onClick={() => { setTab('dashboard'); setSearchQuery(''); }}
+                  >
+                    ← {t.back}
+                  </button>
+                  <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>{t.confirmedClients}</h3>
+                </div>
                 <div className="search-input-wrapper">
                   <Search className="search-icon" size={18} />
                   <input
                     type="text"
                     className="search-input"
-                    placeholder="Search approved school name or principal..."
+                    placeholder={t.searchPlaceholderConfirmed}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
@@ -963,14 +1157,14 @@ export default function Home() {
               {/* Schools List (Approved only) */}
               {loading ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
-                  Loading school list...
+                  {t.loadingConfirmedList}
                 </div>
               ) : approvedList.length > 0 ? (
                 <div className="visit-card-list">
                   {approvedList.map((visit) => (
                     <div 
                       key={visit.id} 
-                      className="visit-card"
+                      className={`visit-card card-${visit.status.toLowerCase()}`}
                       onClick={() => setSelectedVisit(visit)}
                     >
                       <div className="visit-card-header">
@@ -1066,7 +1260,7 @@ export default function Home() {
                           </div>
                         )}
 
-                        <div style={{ display: 'flex', gap: '12px', fontSize: '12px', color: 'var(--text-secondary)', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '6px' }}>
+                        <div style={{ display: 'flex', gap: '12px', fontSize: '12px', color: 'var(--text-secondary)', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '6px', flexWrap: 'wrap' }}>
                           {visit.classes && (
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                               <BookOpen size={12} style={{ color: 'var(--primary)' }} />
@@ -1078,6 +1272,11 @@ export default function Home() {
                               Sections: {visit.sections.join(', ')}
                             </span>
                           )}
+                          {visit.range && (
+                            <span>
+                              Range: {visit.range}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1085,9 +1284,104 @@ export default function Home() {
                 </div>
               ) : (
                 <div style={{ textAlign: 'center', padding: '60px 40px', color: 'var(--text-secondary)' }}>
-                  No approved schools saved yet. Approve visits to add schools here.
+                  {t.noConfirmedSaved}
                 </div>
               )}
+            </>
+          )}
+
+          {currentTab === 'analysis' && (
+            <>
+              {/* Sticky Header */}
+              <div className="search-container">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <button 
+                    className="btn btn-secondary" 
+                    style={{ width: 'auto', padding: '6px 12px', fontSize: '12px' }} 
+                    onClick={() => setTab('dashboard')}
+                  >
+                    ← {t.back}
+                  </button>
+                  <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>{t.clientAnalysis}</h3>
+                </div>
+              </div>
+
+              <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {/* Stats Overview */}
+                <div className="section-card">
+                  <h3 className="section-card-title">{t.metricsOverview}</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                      <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t.totalClients}</span>
+                      <div style={{ fontSize: '20px', fontWeight: 700, marginTop: '4px' }}>{totalVisits}</div>
+                    </div>
+                    <div style={{ background: 'rgba(16, 185, 129, 0.05)', padding: '12px', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.15)' }}>
+                      <span style={{ fontSize: '12px', color: 'var(--approved)' }}>{language === 'en' ? 'Confirmed' : 'पुष्टि किए गए'}</span>
+                      <div style={{ fontSize: '20px', fontWeight: 700, marginTop: '4px', color: 'var(--approved)' }}>{approvedSchools}</div>
+                    </div>
+                    <div style={{ background: 'rgba(245, 158, 11, 0.05)', padding: '12px', borderRadius: '10px', border: '1px solid rgba(245, 158, 11, 0.15)' }}>
+                      <span style={{ fontSize: '12px', color: 'var(--pending)' }}>{language === 'en' ? 'Pending' : 'लंबित'}</span>
+                      <div style={{ fontSize: '20px', fontWeight: 700, marginTop: '4px', color: 'var(--pending)' }}>{pendingVisits}</div>
+                    </div>
+                    <div style={{ background: 'rgba(239, 68, 68, 0.05)', padding: '12px', borderRadius: '10px', border: '1px solid rgba(239, 68, 68, 0.15)' }}>
+                      <span style={{ fontSize: '12px', color: 'var(--rejected)' }}>{language === 'en' ? 'Declined' : 'अस्वीकृत'}</span>
+                      <div style={{ fontSize: '20px', fontWeight: 700, marginTop: '4px', color: 'var(--rejected)' }}>{rejectedSchools}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Conversion Rate */}
+                <div className="section-card">
+                  <h3 className="section-card-title">{t.conversionRate}</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
+                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{t.conversionRatio}</span>
+                    <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--approved)' }}>
+                      {totalVisits > 0 ? Math.round((approvedSchools / totalVisits) * 100) : 0}%
+                    </span>
+                  </div>
+                  {/* Custom Progress Bar */}
+                  <div style={{ width: '100%', height: '8px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '4px', marginTop: '10px', overflow: 'hidden' }}>
+                    <div style={{ 
+                      width: `${totalVisits > 0 ? (approvedSchools / totalVisits) * 100 : 0}%`, 
+                      height: '100%', 
+                      backgroundColor: 'var(--approved)', 
+                      borderRadius: '4px',
+                      transition: 'width 0.5s ease-out'
+                    }} />
+                  </div>
+                </div>
+
+                {/* Geographic / City Distribution */}
+                <div className="section-card">
+                  <h3 className="section-card-title">{t.geographicBreakdown}</h3>
+                  {sortedCities.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
+                      {sortedCities.map(([city, count]) => {
+                        const pct = Math.round((count / totalVisits) * 100);
+                        return (
+                          <div key={city} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                              <span style={{ fontWeight: 500 }}>{city}</span>
+                              <span style={{ color: 'var(--text-secondary)' }}>
+                                {language === 'en' 
+                                  ? `${count} client${count > 1 ? 's' : ''} (${pct}%)` 
+                                  : `${count} ग्राहक (${pct}%)`}
+                              </span>
+                            </div>
+                            <div style={{ width: '100%', height: '6px', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '3px', overflow: 'hidden' }}>
+                              <div style={{ width: `${pct}%`, height: '100%', backgroundColor: 'var(--primary)', borderRadius: '3px' }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '12px 0', color: 'var(--text-secondary)', fontSize: '13px' }}>
+                      {t.noCityData}
+                    </div>
+                  )}
+                </div>
+              </div>
             </>
           )}
 
@@ -1095,15 +1389,15 @@ export default function Home() {
           {isAddingVisit && (
             <div className="modal-overlay" onClick={() => setIsAddingVisit(false)}>
               <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                <h3 className="form-title">Plan New Visit</h3>
+                <h3 className="form-title">{t.planNewVisit}</h3>
                 <form onSubmit={handleAddVisitSubmit}>
                   <div className="form-group">
-                    <label className="form-label" htmlFor="new-school-name">School Name</label>
+                    <label className="form-label" htmlFor="new-school-name">{t.clientSchoolName}</label>
                     <input
                       id="new-school-name"
                       type="text"
                       className="form-input"
-                      placeholder="e.g. ABC Public School"
+                      placeholder="e.g. ABC Public School or Client Co."
                       required
                       value={newSchoolName}
                       onChange={(e) => setNewSchoolName(e.target.value)}
@@ -1112,7 +1406,7 @@ export default function Home() {
                   
                   <div className="form-row">
                     <div className="form-group">
-                      <label className="form-label" htmlFor="new-city">City (Optional)</label>
+                      <label className="form-label" htmlFor="new-city">{t.city}</label>
                       <input
                         id="new-city"
                         type="text"
@@ -1123,7 +1417,7 @@ export default function Home() {
                       />
                     </div>
                     <div className="form-group">
-                      <label className="form-label" htmlFor="new-date">Visit Date</label>
+                      <label className="form-label" htmlFor="new-date">{t.visitDate}</label>
                       <input
                         id="new-date"
                         type="date"
@@ -1135,8 +1429,22 @@ export default function Home() {
                     </div>
                   </div>
 
+                  <div className="form-row">
+                    <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                      <label className="form-label" htmlFor="new-range">{t.range}</label>
+                      <input
+                        id="new-range"
+                        type="text"
+                        className="form-input"
+                        placeholder={t.rangePlaceholder}
+                        value={newRange}
+                        onChange={(e) => setNewRange(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
                   <div className="form-group">
-                    <label className="form-label" htmlFor="new-notes">Notes (Optional)</label>
+                    <label className="form-label" htmlFor="new-notes">{t.notes}</label>
                     <textarea
                       id="new-notes"
                       className="form-input"
@@ -1149,10 +1457,10 @@ export default function Home() {
 
                   <div className="form-row" style={{ marginTop: '24px' }}>
                     <button type="button" className="btn btn-secondary" onClick={() => setIsAddingVisit(false)}>
-                      Cancel
+                      {t.cancel}
                     </button>
                     <button type="submit" className="btn btn-primary">
-                      Add to Visit List
+                      {t.addClientVisit}
                     </button>
                   </div>
                 </form>
@@ -1160,8 +1468,6 @@ export default function Home() {
             </div>
           )}
 
-          {/* Fixed Bottom Nav Bar */}
-          <BottomNav currentTab={currentTab} setTab={(tab) => { setTab(tab); setSearchQuery(''); }} />
         </>
       )}
 
@@ -1173,7 +1479,37 @@ export default function Home() {
         initialDate={selectedVisit?.followUpDate}
         initialAction={selectedVisit?.followUpAction}
         initialNotes={selectedVisit?.followUpNotes}
+        lang={language}
       />
+
+      {/* Floating Language Switcher Toggle */}
+      <button
+        className="lang-switcher-btn"
+        style={{
+          position: 'fixed',
+          bottom: '24px',
+          left: '24px',
+          width: '48px',
+          height: '48px',
+          borderRadius: '50%',
+          backgroundColor: 'var(--primary)',
+          color: 'white',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          boxShadow: '0 4px 16px rgba(99, 102, 241, 0.4)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '14px',
+          fontWeight: 800,
+          cursor: 'pointer',
+          zIndex: 9999,
+          transition: 'all 0.2s ease'
+        }}
+        onClick={() => changeLanguage(language === 'en' ? 'hi' : 'en')}
+        title={language === 'en' ? 'Change language to Hindi' : 'भाषा बदलकर अंग्रेजी करें'}
+      >
+        {language === 'en' ? 'हि' : 'EN'}
+      </button>
     </div>
   );
 }

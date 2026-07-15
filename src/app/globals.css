@@ -1,28 +1,28 @@
 @import "tailwindcss";
 
 :root {
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --bg-dark: #0b0f19;
-  --bg-card: #151c2c;
-  --bg-card-hover: #1e2638;
-  --border-color: #242f47;
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --bg-dark: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --border-color: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
   --text-muted: #64748b;
-  --pending: #f59e0b;
-  --pending-bg: rgba(245, 158, 11, 0.15);
-  --approved: #10b981;
-  --approved-bg: rgba(16, 185, 129, 0.15);
-  --rejected: #ef4444;
-  --rejected-bg: rgba(239, 68, 68, 0.15);
-  --followup: #3b82f6;
-  --followup-bg: rgba(59, 130, 246, 0.15);
+  --pending: #b45309;
+  --pending-bg: #fef3c7;
+  --approved: #047857;
+  --approved-bg: #d1fae5;
+  --rejected: #b91c1c;
+  --rejected-bg: #fee2e2;
+  --followup: #1d4ed8;
+  --followup-bg: #dbeafe;
   --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
 }
 
 body {
-  background-color: #05070c;
+  background-color: #f1f5f9;
   color: var(--text-primary);
   font-family: var(--font-sans);
   margin: 0;
@@ -44,7 +44,7 @@ body {
   position: relative;
   border-left: 1px solid var(--border-color);
   border-right: 1px solid var(--border-color);
-  padding-bottom: 84px; /* Space for bottom nav */
+  padding-bottom: 40px; /* Breathing room at bottom */
 }
 
 /* Connection indicator */
@@ -134,26 +134,36 @@ body {
 
 /* Metric Cards */
 .metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  display: flex;
+  overflow-x: auto;
+  gap: 10px;
   margin-bottom: 20px;
+  padding: 4px 4px 12px 4px;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  scrollbar-width: none; /* Hide scrollbar for Firefox */
+}
+
+.metrics-grid::-webkit-scrollbar {
+  display: none; /* Hide scrollbar for Chrome/Safari */
 }
 
 .metric-card-full {
-  grid-column: span 2;
+  display: none; /* No longer needed in flex layout */
 }
 
 .metric-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 16px;
-  padding: 16px;
+  border-radius: 12px;
+  padding: 10px 10px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   transition: transform 0.2s ease, border-color 0.2s ease;
-  min-height: 100px;
+  min-height: 80px;
+  width: 106px;
+  flex-shrink: 0;
 }
 
 .metric-card:active {
@@ -162,27 +172,36 @@ body {
 
 .metric-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 8px;
+  gap: 4px;
+  margin-bottom: 6px;
+  width: 100%;
 }
 
 .metric-title {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--text-secondary);
+  line-height: 1.25;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .metric-value {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--text-primary);
+  line-height: 1;
 }
 
 /* Header */
 .app-header {
   padding: 16px 20px;
-  background: rgba(11, 15, 25, 0.8);
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(8px);
   position: sticky;
   top: 0;
@@ -196,7 +215,7 @@ body {
 .app-title {
   font-size: 20px;
   font-weight: 700;
-  background: linear-gradient(135deg, #a5b4fc, #6366f1);
+  background: linear-gradient(135deg, #4f46e5, #818cf8);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -283,7 +302,7 @@ body {
 }
 
 .visit-card {
-  background: var(--bg-card);
+  background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 16px;
@@ -293,7 +312,7 @@ body {
 
 .visit-card:active {
   transform: scale(0.98);
-  background-color: var(--bg-card-hover);
+  background-color: var(--bg-card-hover) !important;
 }
 
 .visit-card-header {
@@ -365,7 +384,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(15, 23, 42, 0.5);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: flex-end; /* Drawer style on mobile */
@@ -413,7 +432,7 @@ body {
 
 .form-input {
   width: 100%;
-  background: rgba(11, 15, 25, 0.5);
+  background: #ffffff;
   border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 12px;
@@ -656,4 +675,37 @@ body {
 
 .reason-option:active {
   background: var(--border-color);
+}
+
+/* Status-specific card backgrounds */
+.visit-card.card-pending {
+  background-color: var(--pending-bg) !important;
+  border-color: rgba(180, 83, 9, 0.25) !important;
+}
+.visit-card.card-pending:active {
+  background-color: #fef08a !important; /* Slate 200 equivalent shade for pending active */
+}
+
+.visit-card.card-approved {
+  background-color: var(--approved-bg) !important;
+  border-color: rgba(4, 120, 87, 0.25) !important;
+}
+.visit-card.card-approved:active {
+  background-color: #a7f3d0 !important;
+}
+
+.visit-card.card-rejected {
+  background-color: var(--rejected-bg) !important;
+  border-color: rgba(185, 28, 28, 0.25) !important;
+}
+.visit-card.card-rejected:active {
+  background-color: #fecaca !important;
+}
+
+.visit-card.card-followup {
+  background-color: var(--followup-bg) !important;
+  border-color: rgba(29, 78, 216, 0.25) !important;
+}
+.visit-card.card-followup:active {
+  background-color: #bfdbfe !important;
 }

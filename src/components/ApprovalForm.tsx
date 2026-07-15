@@ -1,18 +1,20 @@
-'use client';
-
 import React, { useState } from 'react';
 import { Plus, Save } from 'lucide-react';
 import { SchoolVisit } from '@/lib/db';
+import { Language, translations } from '@/lib/translations';
 
 interface ApprovalFormProps {
   visit: SchoolVisit;
   onSave: (updatedData: Partial<SchoolVisit>) => void;
   onCancel: () => void;
+  lang: Language;
 }
 
 const CLASS_OPTIONS = ['Nursery', 'LKG', 'UKG', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
 
-export default function ApprovalForm({ visit, onSave, onCancel }: ApprovalFormProps) {
+export default function ApprovalForm({ visit, onSave, onCancel, lang = 'en' }: ApprovalFormProps) {
+  const t = translations[lang];
+
   const [schoolName, setSchoolName] = useState(visit.schoolName);
   const [address, setAddress] = useState(visit.schoolDetails?.address || '');
   const [principalName, setPrincipalName] = useState(visit.schoolDetails?.principalName || '');
@@ -112,9 +114,9 @@ export default function ApprovalForm({ visit, onSave, onCancel }: ApprovalFormPr
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div className="section-card">
-        <div className="section-card-title">School Details</div>
+        <div className="section-card-title">{t.schoolDetails}</div>
         <div className="form-group">
-          <label className="form-label" htmlFor="school-name">School Name</label>
+          <label className="form-label" htmlFor="school-name">{t.clientSchoolName}</label>
           <input
             id="school-name"
             type="text"
@@ -125,19 +127,19 @@ export default function ApprovalForm({ visit, onSave, onCancel }: ApprovalFormPr
           />
         </div>
         <div className="form-group">
-          <label className="form-label" htmlFor="address">Address</label>
+          <label className="form-label" htmlFor="address">{t.address}</label>
           <input
             id="address"
             type="text"
             className="form-input"
             required
-            placeholder="Complete address..."
+            placeholder={t.address + '...'}
             value={address}
             onChange={(e) => setAddress(e.target.value)}
           />
         </div>
         <div className="form-group">
-          <label className="form-label" htmlFor="principal-name">Principal/HM Name</label>
+          <label className="form-label" htmlFor="principal-name">{t.principalName}</label>
           <input
             id="principal-name"
             type="text"
@@ -150,7 +152,7 @@ export default function ApprovalForm({ visit, onSave, onCancel }: ApprovalFormPr
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label" htmlFor="principal-mobile">Principal Mobile</label>
+            <label className="form-label" htmlFor="principal-mobile">{t.principalMobile}</label>
             <input
               id="principal-mobile"
               type="tel"
@@ -162,7 +164,7 @@ export default function ApprovalForm({ visit, onSave, onCancel }: ApprovalFormPr
             />
           </div>
           <div className="form-group">
-            <label className="form-label" htmlFor="principal-email">Principal Email</label>
+            <label className="form-label" htmlFor="principal-email">{t.principalEmail}</label>
             <input
               id="principal-email"
               type="email"
@@ -176,9 +178,9 @@ export default function ApprovalForm({ visit, onSave, onCancel }: ApprovalFormPr
       </div>
 
       <div className="section-card">
-        <div className="section-card-title">ID Incharge Details</div>
+        <div className="section-card-title">{t.idInchargeDetails}</div>
         <div className="form-group">
-          <label className="form-label" htmlFor="incharge-name">Incharge Name</label>
+          <label className="form-label" htmlFor="incharge-name">{t.inchargeName}</label>
           <input
             id="incharge-name"
             type="text"
@@ -190,7 +192,7 @@ export default function ApprovalForm({ visit, onSave, onCancel }: ApprovalFormPr
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label" htmlFor="incharge-mobile">Incharge Mobile</label>
+            <label className="form-label" htmlFor="incharge-mobile">{t.inchargeMobile}</label>
             <input
               id="incharge-mobile"
               type="tel"
@@ -201,7 +203,7 @@ export default function ApprovalForm({ visit, onSave, onCancel }: ApprovalFormPr
             />
           </div>
           <div className="form-group">
-            <label className="form-label" htmlFor="incharge-email">Incharge Email</label>
+            <label className="form-label" htmlFor="incharge-email">{t.inchargeEmail}</label>
             <input
               id="incharge-email"
               type="email"
@@ -215,9 +217,9 @@ export default function ApprovalForm({ visit, onSave, onCancel }: ApprovalFormPr
       </div>
 
       <div className="section-card">
-        <div className="section-card-title">Reception Details (Optional)</div>
+        <div className="section-card-title">{t.receptionDetails}</div>
         <div className="form-group">
-          <label className="form-label" htmlFor="reception-name">Reception Name</label>
+          <label className="form-label" htmlFor="reception-name">{t.receptionName}</label>
           <input
             id="reception-name"
             type="text"
@@ -229,7 +231,7 @@ export default function ApprovalForm({ visit, onSave, onCancel }: ApprovalFormPr
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label" htmlFor="reception-mobile">Reception Mobile</label>
+            <label className="form-label" htmlFor="reception-mobile">{t.receptionMobile}</label>
             <input
               id="reception-mobile"
               type="tel"
@@ -240,7 +242,7 @@ export default function ApprovalForm({ visit, onSave, onCancel }: ApprovalFormPr
             />
           </div>
           <div className="form-group">
-            <label className="form-label" htmlFor="reception-email">Reception Email</label>
+            <label className="form-label" htmlFor="reception-email">{t.receptionEmail}</label>
             <input
               id="reception-email"
               type="email"
@@ -254,10 +256,10 @@ export default function ApprovalForm({ visit, onSave, onCancel }: ApprovalFormPr
       </div>
 
       <div className="section-card">
-        <div className="section-card-title">Classes & Card Types</div>
+        <div className="section-card-title">{t.classesCardTypes}</div>
         <div className="form-row" style={{ marginBottom: '16px' }}>
           <div className="form-group">
-            <label className="form-label" htmlFor="class-from">From Class</label>
+            <label className="form-label" htmlFor="class-from">{t.fromClass}</label>
             <select
               id="class-from"
               className="form-input"
@@ -271,7 +273,7 @@ export default function ApprovalForm({ visit, onSave, onCancel }: ApprovalFormPr
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label" htmlFor="class-to">To Class</label>
+            <label className="form-label" htmlFor="class-to">{t.toClass}</label>
             <select
               id="class-to"
               className="form-input"
@@ -286,7 +288,7 @@ export default function ApprovalForm({ visit, onSave, onCancel }: ApprovalFormPr
           </div>
         </div>
 
-        <label className="form-label" style={{ marginBottom: '8px' }}>Card Type Required</label>
+        <label className="form-label" style={{ marginBottom: '8px' }}>{t.cardTypeRequired}</label>
         <div className="checkbox-grid">
           {['Student', 'Staff', 'Bus', 'Other'].map((type) => (
             <label key={type} className="checkbox-label">
@@ -295,20 +297,20 @@ export default function ApprovalForm({ visit, onSave, onCancel }: ApprovalFormPr
                 checked={cardTypes.includes(type)}
                 onChange={() => handleCardTypeChange(type)}
               />
-              <span>{type}</span>
+              <span>{type === 'Student' ? t.student : type === 'Staff' ? t.staff : type === 'Bus' ? t.bus : type === 'Other' ? t.other : type}</span>
             </label>
           ))}
         </div>
       </div>
 
       <div className="section-card">
-        <div className="section-card-title">Sections</div>
+        <div className="section-card-title">{t.sections}</div>
         <div className="dynamic-list-builder">
           <div className="dynamic-tag-input-row">
             <input
               type="text"
               className="form-input"
-              placeholder="e.g. E or V-A"
+              placeholder={t.addSectionPlaceholder}
               value={newSection}
               onChange={(e) => setNewSection(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSection())}
@@ -336,20 +338,20 @@ export default function ApprovalForm({ visit, onSave, onCancel }: ApprovalFormPr
               </span>
             ))}
             {sections.length === 0 && (
-              <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No sections added yet.</span>
+              <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{t.noSectionsYet}</span>
             )}
           </div>
         </div>
       </div>
 
       <div className="section-card">
-        <div className="section-card-title">Houses</div>
+        <div className="section-card-title">{t.houses}</div>
         <div className="dynamic-list-builder">
           <div className="dynamic-tag-input-row">
             <input
               type="text"
               className="form-input"
-              placeholder="e.g. Orange"
+              placeholder={t.addHousePlaceholder}
               value={newHouse}
               onChange={(e) => setNewHouse(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddHouse())}
@@ -377,19 +379,19 @@ export default function ApprovalForm({ visit, onSave, onCancel }: ApprovalFormPr
               </span>
             ))}
             {houses.length === 0 && (
-              <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No houses added yet.</span>
+              <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{t.noHousesYet}</span>
             )}
           </div>
         </div>
       </div>
 
       <div className="section-card">
-        <div className="section-card-title">Additional Notes</div>
+        <div className="section-card-title">{t.additionalNotes}</div>
         <div className="form-group" style={{ marginBottom: 0 }}>
           <textarea
             className="form-input"
             style={{ minHeight: '120px', resize: 'vertical' }}
-            placeholder="Type any specific requests or remarks here (e.g. Need cards before August)..."
+            placeholder={t.additionalNotesPlaceholder}
             value={additionalNotes}
             onChange={(e) => setAdditionalNotes(e.target.value)}
           />
@@ -398,10 +400,10 @@ export default function ApprovalForm({ visit, onSave, onCancel }: ApprovalFormPr
 
       <div className="form-row" style={{ marginTop: '8px', marginBottom: '24px' }}>
         <button type="button" className="btn btn-secondary" onClick={onCancel}>
-          Cancel
+          {t.cancel}
         </button>
         <button type="submit" className="btn btn-success">
-          <Save size={18} /> Save & Approve
+          <Save size={18} /> {t.saveConfirm}
         </button>
       </div>
     </form>
