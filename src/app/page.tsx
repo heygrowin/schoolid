@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { 
-  Plus, Search, Calendar, MapPin, Phone, Mail, BookOpen, 
-  Layers, Palette, Clipboard, CheckCircle2, AlertCircle, 
+import {
+  Plus, Search, Calendar, MapPin, Phone, Mail, BookOpen,
+  Layers, Palette, Clipboard, CheckCircle2, AlertCircle,
   ChevronLeft, Edit, Wifi, WifiOff, School, AlertTriangle, BarChart3
 } from 'lucide-react';
 import { dbService, SchoolVisit, Vendor } from '@/lib/db';
@@ -35,11 +35,11 @@ export default function Home() {
   };
 
   const t = translations[language];
-  
+
   const recentVisits = [...visits]
     .sort((a, b) => new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime())
     .slice(0, 3);
-  
+
   // Selection & workflow states
   const [selectedVisit, setSelectedVisit] = useState<SchoolVisit | null>(null);
   const [isAddingVisit, setIsAddingVisit] = useState(false);
@@ -65,7 +65,7 @@ export default function Home() {
   const [newPrincipalName, setNewPrincipalName] = useState('');
   const [newPrincipalMobile, setNewPrincipalMobile] = useState('');
   const [newPrincipalEmail, setNewPrincipalEmail] = useState('');
-  
+
   const [newInchargeName, setNewInchargeName] = useState('');
   const [newInchargeMobile, setNewInchargeMobile] = useState('');
   const [newInchargeEmail, setNewInchargeEmail] = useState('');
@@ -142,7 +142,7 @@ export default function Home() {
       setSelectedVisit((prev) =>
         prev ? { ...prev, ...updates } : null
       );
-      
+
       setIsSchedulingFollowUp(false);
       setTimeout(() => setSyncStatus('synced'), 800);
     } catch (e) {
@@ -169,7 +169,7 @@ export default function Home() {
     try {
       const data = await dbService.getVendors();
       setVendors(data);
-    } catch(e) {
+    } catch (e) {
       console.error(e);
     }
   };
@@ -182,18 +182,18 @@ export default function Home() {
       if (stored) {
         try {
           setCustomCities(JSON.parse(stored));
-        } catch(e) {
+        } catch (e) {
           console.error(e);
         }
       }
-      
+
       const cachedVendor = localStorage.getItem('currentVendor');
       if (cachedVendor) {
         try {
           const parsed = JSON.parse(cachedVendor);
           setCurrentVendor(parsed);
           setIsAdminMode(false);
-        } catch(e) {
+        } catch (e) {
           console.error(e);
         }
       }
@@ -224,7 +224,7 @@ export default function Home() {
       if (isNaN(d.getTime())) return dateStr;
       const day = d.getDate();
       const months = [
-        'January', 'February', 'March', 'April', 'May', 'June', 
+        'January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'
       ];
       const month = months[d.getMonth()];
@@ -295,7 +295,7 @@ export default function Home() {
     try {
       const added = await dbService.saveVisit(visitData);
       setVisits((prev) => [added, ...prev]);
-      
+
       // Reset form
       setNewSchoolName('');
       setNewCity('');
@@ -303,7 +303,7 @@ export default function Home() {
       setNewVisitDate(today.toISOString().split('T')[0]);
       setNewNotes('');
       setNewRange('');
-      
+
       setNewAddress('');
       setNewPrincipalName('');
       setNewPrincipalMobile('');
@@ -326,7 +326,7 @@ export default function Home() {
       setNewAdditionalNotes('');
 
       setIsAddingVisit(false);
-      
+
       // Go to visits tab to see it
       setTab('visits');
       setTimeout(() => setSyncStatus('synced'), 800);
@@ -360,7 +360,7 @@ export default function Home() {
       if (selectedVendorForEdit) {
         // Edit flow
         await dbService.updateVendor(selectedVendorForEdit.id, vendorData);
-        setVendors((prev) => 
+        setVendors((prev) =>
           prev.map(v => v.id === selectedVendorForEdit.id ? { ...v, ...vendorData } : v)
         );
         alert('Vendor details updated successfully!');
@@ -381,9 +381,9 @@ export default function Home() {
       setNewVendorCities([]);
       setIsAddingVendor(false);
       setSelectedVendorForEdit(null);
-      
+
       setTimeout(() => setSyncStatus('synced'), 800);
-    } catch(e) {
+    } catch (e) {
       console.error(e);
       setSyncStatus('synced');
     }
@@ -437,7 +437,7 @@ export default function Home() {
         status: 'Rejected',
         rejectionReason: reason,
       });
-      
+
       // Update local state
       setVisits((prev) =>
         prev.map((v) =>
@@ -446,12 +446,12 @@ export default function Home() {
             : v
         )
       );
-      
+
       // Update selected visit view
       setSelectedVisit((prev) =>
         prev ? { ...prev, status: 'Rejected', rejectionReason: reason } : null
       );
-      
+
       setIsRejecting(false);
       setTimeout(() => setSyncStatus('synced'), 800);
     } catch (e) {
@@ -466,7 +466,7 @@ export default function Home() {
     setSyncStatus('syncing');
     try {
       await dbService.updateVisit(selectedVisit.id, updatedData);
-      
+
       // Update local state
       setVisits((prev) =>
         prev.map((v) =>
@@ -511,13 +511,13 @@ export default function Home() {
       if (v.createdByVendorId === currentVendor.id) {
         return true;
       }
-      
+
       // 2. If it was created by admin or someone else: they only see it if it belongs to their allowed assigned cities AND was NOT explicitly created by another vendor (unless city matches)
       if (!v.city) return false;
       const lowerCity = v.city.trim().toLowerCase();
       const allowedLowers = currentVendor.allowedCities.map(c => c.trim().toLowerCase());
       const isCityMatched = allowedLowers.includes(lowerCity);
-      
+
       // If city matches, show it. Otherwise, hide it.
       return isCityMatched;
     }
@@ -549,7 +549,7 @@ export default function Home() {
 
     // 1. Search Query filter (matches School Name, Principal, Status, City, or Range)
     const query = searchQuery.toLowerCase().trim();
-    const matchesSearch = 
+    const matchesSearch =
       v.schoolName.toLowerCase().includes(query) ||
       (v.schoolDetails?.principalName && v.schoolDetails.principalName.toLowerCase().includes(query)) ||
       v.status.toLowerCase().includes(query) ||
@@ -578,8 +578,8 @@ export default function Home() {
       {/* App Header */}
       <header className="app-header">
         <div>
-          <span 
-            className="app-title" 
+          <span
+            className="app-title"
             style={{ cursor: 'pointer' }}
             onClick={() => { setTab('dashboard'); setSearchQuery(''); setSelectedVisit(null); }}
           >
@@ -645,12 +645,12 @@ export default function Home() {
             </div>
           ) : syncStatus === 'syncing' ? (
             <div className="conn-indicator" style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#60a5fa', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px', fontSize: '11px' }}>
-              <span style={{ 
-                display: 'inline-block', 
-                width: '6px', 
-                height: '6px', 
-                borderRadius: '50%', 
-                border: '2px solid #60a5fa', 
+              <span style={{
+                display: 'inline-block',
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                border: '2px solid #60a5fa',
                 borderTopColor: 'transparent',
                 animation: 'spin 1s linear infinite'
               }}></span>
@@ -670,8 +670,8 @@ export default function Home() {
         /* DETAIL PAGE / WORKFLOW VIEW */
         <div className="details-container">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <button 
-              className="btn btn-secondary" 
+            <button
+              className="btn btn-secondary"
               style={{ width: 'auto', padding: '8px 12px', fontSize: '13px' }}
               onClick={() => {
                 setSelectedVisit(null);
@@ -682,8 +682,8 @@ export default function Home() {
               <ChevronLeft size={16} /> {t.backToList}
             </button>
 
-            <button 
-              className="btn btn-danger" 
+            <button
+              className="btn btn-danger"
               style={{ width: 'auto', padding: '8px 12px', fontSize: '13px', backgroundColor: 'transparent', border: '1px solid var(--rejected)', color: 'var(--rejected)' }}
               onClick={() => handleDeleteVisit(selectedVisit.id)}
             >
@@ -697,19 +697,18 @@ export default function Home() {
               {selectedVisit.schoolName}
             </h2>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <span className={`badge ${
-                selectedVisit.status === 'Approved' 
-                  ? 'badge-approved' 
-                  : selectedVisit.status === 'Rejected' 
-                    ? 'badge-rejected' 
+              <span className={`badge ${selectedVisit.status === 'Approved'
+                  ? 'badge-approved'
+                  : selectedVisit.status === 'Rejected'
+                    ? 'badge-rejected'
                     : selectedVisit.status === 'FollowUp'
                       ? 'badge-followup'
                       : 'badge-pending'
-              }`}>
-                {selectedVisit.status === 'Approved' 
+                }`}>
+                {selectedVisit.status === 'Approved'
                   ? (language === 'en' ? 'Confirmed ✅' : 'पुष्टि की गई ✅')
-                  : selectedVisit.status === 'Rejected' 
-                    ? (language === 'en' ? 'Declined ❌' : 'अस्वीकार किया गया ❌') 
+                  : selectedVisit.status === 'Rejected'
+                    ? (language === 'en' ? 'Declined ❌' : 'अस्वीकार किया गया ❌')
                     : selectedVisit.status === 'FollowUp'
                       ? (language === 'en' ? 'Follow-Up 🔵' : 'फॉलो-अप 🔵')
                       : (language === 'en' ? 'Pending 🟡' : 'लंबित 🟡')}
@@ -747,24 +746,24 @@ export default function Home() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
                 <div className="form-row">
-                  <button 
-                    className="btn btn-danger" 
+                  <button
+                    className="btn btn-danger"
                     onClick={() => setIsRejecting(true)}
                     style={{ height: '56px', fontSize: '16px' }}
                   >
                     ❌ {t.decline}
                   </button>
-                  <button 
-                    className="btn btn-success" 
+                  <button
+                    className="btn btn-success"
                     onClick={() => handleApproveSave({ status: 'Approved' })}
                     style={{ height: '56px', fontSize: '16px' }}
                   >
                     ✅ {t.confirm}
                   </button>
                 </div>
-                <button 
+                <button
                   type="button"
-                  className="btn" 
+                  className="btn"
                   onClick={() => setIsSchedulingFollowUp(true)}
                   style={{ height: '56px', fontSize: '16px', backgroundColor: 'var(--followup-bg)', color: 'var(--followup)', border: '1px solid var(--border-color)' }}
                 >
@@ -814,23 +813,23 @@ export default function Home() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '24px' }}>
                 <div className="form-row">
-                  <button 
-                    className="btn btn-danger" 
+                  <button
+                    className="btn btn-danger"
                     onClick={() => setIsRejecting(true)}
                     style={{ height: '48px', fontSize: '14px' }}
                   >
                     ❌ {t.decline}
                   </button>
-                  <button 
-                    className="btn btn-success" 
+                  <button
+                    className="btn btn-success"
                     onClick={() => handleApproveSave({ status: 'Approved' })}
                     style={{ height: '48px', fontSize: '14px' }}
                   >
                     ✅ {t.confirmClient}
                   </button>
                 </div>
-                <button 
-                  className="btn btn-secondary" 
+                <button
+                  className="btn btn-secondary"
                   onClick={() => setIsSchedulingFollowUp(true)}
                   style={{ height: '48px', fontSize: '14px' }}
                 >
@@ -855,8 +854,8 @@ export default function Home() {
                 <span className="detail-value">{formatDate(selectedVisit.visitDate)}</span>
               </div>
               <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
-                <button 
-                  className="btn btn-secondary" 
+                <button
+                  className="btn btn-secondary"
                   style={{ padding: '10px 14px' }}
                   onClick={() => {
                     setIsRejecting(true);
@@ -864,8 +863,8 @@ export default function Home() {
                 >
                   {t.editReason}
                 </button>
-                <button 
-                  className="btn btn-primary" 
+                <button
+                  className="btn btn-primary"
                   style={{ padding: '10px 14px' }}
                   onClick={() => {
                     setIsApproving(true);
@@ -889,9 +888,9 @@ export default function Home() {
                 <div className="detail-row">
                   <span className="detail-label">{language === 'en' ? 'Mobile' : 'मोबाइल'}</span>
                   {selectedVisit.schoolDetails?.principalMobile ? (
-                    <a 
+                    <a
                       href={`tel:${selectedVisit.schoolDetails.principalMobile}`}
-                      className="detail-value" 
+                      className="detail-value"
                       style={{ color: 'var(--primary)', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                     >
                       <Phone size={14} /> {selectedVisit.schoolDetails.principalMobile}
@@ -903,7 +902,7 @@ export default function Home() {
                 {selectedVisit.schoolDetails?.principalEmail && (
                   <div className="detail-row">
                     <span className="detail-label">{language === 'en' ? 'Email' : 'ईमेल'}</span>
-                    <a 
+                    <a
                       href={`mailto:${selectedVisit.schoolDetails.principalEmail}`}
                       className="detail-value"
                       style={{ color: 'var(--primary)', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
@@ -930,7 +929,7 @@ export default function Home() {
                   {selectedVisit.idIncharge.mobile && (
                     <div className="detail-row">
                       <span className="detail-label">{language === 'en' ? 'Mobile' : 'मोबाइल'}</span>
-                      <a 
+                      <a
                         href={`tel:${selectedVisit.idIncharge.mobile}`}
                         className="detail-value"
                         style={{ color: 'var(--primary)', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
@@ -942,7 +941,7 @@ export default function Home() {
                   {selectedVisit.idIncharge.email && (
                     <div className="detail-row">
                       <span className="detail-label">{language === 'en' ? 'Email' : 'ईमेल'}</span>
-                      <a 
+                      <a
                         href={`mailto:${selectedVisit.idIncharge.email}`}
                         className="detail-value"
                         style={{ color: 'var(--primary)', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
@@ -964,7 +963,7 @@ export default function Home() {
                   {selectedVisit.reception.mobile && (
                     <div className="detail-row">
                       <span className="detail-label">{language === 'en' ? 'Mobile' : 'मोबाइल'}</span>
-                      <a 
+                      <a
                         href={`tel:${selectedVisit.reception.mobile}`}
                         className="detail-value"
                         style={{ color: 'var(--primary)', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
@@ -976,7 +975,7 @@ export default function Home() {
                   {selectedVisit.reception.email && (
                     <div className="detail-row">
                       <span className="detail-label">{language === 'en' ? 'Email' : 'ईमेल'}</span>
-                      <a 
+                      <a
                         href={`mailto:${selectedVisit.reception.email}`}
                         className="detail-value"
                         style={{ color: 'var(--primary)', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
@@ -1003,7 +1002,7 @@ export default function Home() {
                   <div className="detail-row" style={{ marginBottom: '16px' }}>
                     <span className="detail-label">{t.cardTypeRequired}</span>
                     <span className="detail-value">
-                      {selectedVisit.cardTypes.map(type => 
+                      {selectedVisit.cardTypes.map(type =>
                         type === 'Student' ? t.student : type === 'Staff' ? t.staff : type === 'Bus' ? t.bus : type === 'Other' ? t.cardOther : type
                       ).join(', ')}
                     </span>
@@ -1043,8 +1042,8 @@ export default function Home() {
               )}
 
               <div style={{ marginTop: '8px', marginBottom: '24px' }}>
-                <button 
-                  className="btn btn-primary" 
+                <button
+                  className="btn btn-primary"
                   onClick={() => setIsApproving(true)}
                   style={{ width: '100%' }}
                 >
@@ -1077,7 +1076,7 @@ export default function Home() {
 
                 <div className="bubble-top-row">
                   <div className="bubble-left-container">
-                    <button 
+                    <button
                       className="bubble-total"
                       onClick={() => {
                         setActiveCategory(null);
@@ -1090,9 +1089,9 @@ export default function Home() {
                       <span className="bubble-total-value">{totalVisits}</span>
                     </button>
                   </div>
-                  
+
                   <div className="bubble-right-grid">
-                    <button 
+                    <button
                       className="bubble-small"
                       onClick={() => {
                         setActiveCategory(null);
@@ -1104,7 +1103,7 @@ export default function Home() {
                       <span className="bubble-small-value">{approvedSchools}</span>
                     </button>
 
-                    <button 
+                    <button
                       className="bubble-small"
                       onClick={() => {
                         setActiveCategory(null);
@@ -1116,7 +1115,7 @@ export default function Home() {
                       <span className="bubble-small-value">{followUpVisits}</span>
                     </button>
 
-                    <button 
+                    <button
                       className="bubble-small"
                       onClick={() => {
                         setActiveCategory(null);
@@ -1128,8 +1127,8 @@ export default function Home() {
                       <span className="bubble-small-value">{pendingVisits}</span>
                     </button>
 
-                    <button 
-                      className="bubble-small" 
+                    <button
+                      className="bubble-small"
                       onClick={() => {
                         setActiveCategory(null);
                         setTab('visits');
@@ -1140,8 +1139,8 @@ export default function Home() {
                       <span className="bubble-small-value">{rejectedSchools}</span>
                     </button>
 
-                    <button 
-                      className="bubble-small" 
+                    <button
+                      className="bubble-small"
                       onClick={() => {
                         setActiveCategory(null);
                         setTab('visits');
@@ -1165,7 +1164,7 @@ export default function Home() {
                   </div>
                 )}
               </div>
-              
+
               {/* Redesigned 6-Category Grid Layout */}
               <div>
                 <div className="category-grid">
@@ -1177,8 +1176,8 @@ export default function Home() {
                     { key: 'Studio', title: 'STUDIO', icon: '/studio.png' },
                     { key: 'Other', title: 'OTHER', icon: '/other.png' }
                   ].map((cat) => (
-                    <div 
-                      key={cat.key} 
+                    <div
+                      key={cat.key}
                       className="category-card"
                       onClick={() => {
                         setActiveCategory(cat.key as any);
@@ -1203,9 +1202,9 @@ export default function Home() {
               {/* Sticky Search bar */}
               <div className="search-container">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <button 
-                    className="btn btn-secondary" 
-                    style={{ width: 'auto', padding: '6px 12px', fontSize: '12px' }} 
+                  <button
+                    className="btn btn-secondary"
+                    style={{ width: 'auto', padding: '6px 12px', fontSize: '12px' }}
                     onClick={() => { setTab('dashboard'); setSearchQuery(''); setActiveCategory(null); }}
                   >
                     ← {t.back}
@@ -1224,7 +1223,7 @@ export default function Home() {
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
                 </div>
-                
+
                 {/* Filter Pills */}
                 <div style={{ display: 'flex', gap: '8px', marginTop: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
                   {(['All', 'Pending', 'FollowUp', 'Approved', 'Rejected'] as const).map((status) => {
@@ -1238,10 +1237,10 @@ export default function Home() {
                       <button
                         key={status}
                         className={`btn`}
-                        style={{ 
-                          width: 'auto', 
-                          padding: '6px 12px', 
-                          fontSize: '12px', 
+                        style={{
+                          width: 'auto',
+                          padding: '6px 12px',
+                          fontSize: '12px',
                           borderRadius: '20px',
                           backgroundColor: statusFilter === status ? 'var(--primary)' : 'rgba(255, 255, 255, 0.05)',
                           color: statusFilter === status ? 'white' : 'var(--text-secondary)',
@@ -1266,8 +1265,8 @@ export default function Home() {
                   {filteredVisits.map((visit) => {
                     const isExpanded = expandedCards.includes(visit.id);
                     return (
-                      <div 
-                        key={visit.id} 
+                      <div
+                        key={visit.id}
                         className={`visit-card card-${visit.status.toLowerCase()}`}
                         style={{ cursor: 'pointer', transition: 'all 0.2s ease', position: 'relative' }}
                         onClick={() => {
@@ -1285,25 +1284,24 @@ export default function Home() {
                             </span>
                             <span className="visit-card-name" style={{ fontWeight: 700 }}>{visit.schoolName}</span>
                           </div>
-                          <span className={`badge ${
-                            visit.status === 'Approved' 
-                              ? 'badge-approved' 
-                              : visit.status === 'Rejected' 
-                                ? 'badge-rejected' 
+                          <span className={`badge ${visit.status === 'Approved'
+                              ? 'badge-approved'
+                              : visit.status === 'Rejected'
+                                ? 'badge-rejected'
                                 : visit.status === 'FollowUp'
                                   ? 'badge-followup'
                                   : 'badge-pending'
-                          }`}>
-                            {visit.status === 'Approved' 
-                              ? 'Approved ✅' 
-                              : visit.status === 'Rejected' 
-                                ? 'Rejected ❌' 
+                            }`}>
+                            {visit.status === 'Approved'
+                              ? 'Approved ✅'
+                              : visit.status === 'Rejected'
+                                ? 'Rejected ❌'
                                 : visit.status === 'FollowUp'
                                   ? 'Follow-Up 🔵'
                                   : 'Pending 🟡'}
                           </span>
                         </div>
-                        
+
                         {isExpanded && (
                           <div className="visit-card-details" style={{ marginTop: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }} onClick={(e) => e.stopPropagation()}>
                             {/* Contact Action call triggers */}
@@ -1312,7 +1310,7 @@ export default function Home() {
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
                                   <span>Principal: <strong>{visit.schoolDetails.principalName}</strong></span>
                                   {visit.schoolDetails.principalMobile && (
-                                    <a 
+                                    <a
                                       href={`tel:${visit.schoolDetails.principalMobile}`}
                                       style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: 'rgba(16, 185, 129, 0.15)', color: 'var(--approved)', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, textDecoration: 'none' }}
                                     >
@@ -1321,12 +1319,12 @@ export default function Home() {
                                   )}
                                 </div>
                               )}
-                              
+
                               {visit.idIncharge?.name && (
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
                                   <span>Incharge: <strong>{visit.idIncharge.name}</strong></span>
                                   {visit.idIncharge.mobile && (
-                                    <a 
+                                    <a
                                       href={`tel:${visit.idIncharge.mobile}`}
                                       style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: 'rgba(99, 102, 241, 0.15)', color: 'var(--primary)', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, textDecoration: 'none' }}
                                     >
@@ -1340,7 +1338,7 @@ export default function Home() {
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
                                   <span>Reception: <strong>{visit.reception.name}</strong></span>
                                   {visit.reception.mobile && (
-                                    <a 
+                                    <a
                                       href={`tel:${visit.reception.mobile}`}
                                       style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, textDecoration: 'none' }}
                                     >
@@ -1373,8 +1371,8 @@ export default function Home() {
                               ) : (
                                 <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>👤 Created by: Admin</span>
                               )}
-                              
-                              <button 
+
+                              <button
                                 className="btn btn-primary"
                                 style={{ width: 'auto', padding: '4px 10px', fontSize: '11px' }}
                                 onClick={() => setSelectedVisit(visit)}
@@ -1396,8 +1394,8 @@ export default function Home() {
 
               {/* FAB to Add Visit */}
               <div className="fab-container">
-                <button 
-                  className="fab" 
+                <button
+                  className="fab"
                   onClick={() => setIsAddingVisit(true)}
                   aria-label="Add new client visit"
                 >
@@ -1412,9 +1410,9 @@ export default function Home() {
               {/* Sticky Search bar */}
               <div className="search-container">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <button 
-                    className="btn btn-secondary" 
-                    style={{ width: 'auto', padding: '6px 12px', fontSize: '12px' }} 
+                  <button
+                    className="btn btn-secondary"
+                    style={{ width: 'auto', padding: '6px 12px', fontSize: '12px' }}
                     onClick={() => { setTab('dashboard'); setSearchQuery(''); setActiveCategory(null); }}
                   >
                     ← {t.back}
@@ -1443,8 +1441,8 @@ export default function Home() {
               ) : approvedList.length > 0 ? (
                 <div className="visit-card-list">
                   {approvedList.map((visit) => (
-                    <div 
-                      key={visit.id} 
+                    <div
+                      key={visit.id}
                       className={`visit-card card-${visit.status.toLowerCase()}`}
                       onClick={() => setSelectedVisit(visit)}
                     >
@@ -1452,7 +1450,7 @@ export default function Home() {
                         <span className="visit-card-name">{visit.schoolName}</span>
                         <span className="badge badge-approved">Approved ✅</span>
                       </div>
-                      
+
                       <div className="visit-card-details" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
                         {visit.schoolDetails?.principalName && (
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
@@ -1461,7 +1459,7 @@ export default function Home() {
                               <strong style={{ color: 'var(--text-primary)' }}>{visit.schoolDetails.principalName}</strong>
                             </div>
                             {visit.schoolDetails?.principalMobile && (
-                              <a 
+                              <a
                                 href={`tel:${visit.schoolDetails.principalMobile}`}
                                 style={{
                                   display: 'inline-flex',
@@ -1490,7 +1488,7 @@ export default function Home() {
                               <strong style={{ color: 'var(--text-primary)' }}>{visit.idIncharge.name}</strong>
                             </div>
                             {visit.idIncharge?.mobile && (
-                              <a 
+                              <a
                                 href={`tel:${visit.idIncharge.mobile}`}
                                 style={{
                                   display: 'inline-flex',
@@ -1519,7 +1517,7 @@ export default function Home() {
                               <strong style={{ color: 'var(--text-primary)' }}>{visit.reception.name}</strong>
                             </div>
                             {visit.reception?.mobile && (
-                              <a 
+                              <a
                                 href={`tel:${visit.reception.mobile}`}
                                 style={{
                                   display: 'inline-flex',
@@ -1581,9 +1579,9 @@ export default function Home() {
               {/* Sticky Header */}
               <div className="search-container">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <button 
-                    className="btn btn-secondary" 
-                    style={{ width: 'auto', padding: '6px 12px', fontSize: '12px' }} 
+                  <button
+                    className="btn btn-secondary"
+                    style={{ width: 'auto', padding: '6px 12px', fontSize: '12px' }}
                     onClick={() => { setTab('dashboard'); setActiveCategory(null); }}
                   >
                     ← {t.back}
@@ -1627,10 +1625,10 @@ export default function Home() {
                   </div>
                   {/* Custom Progress Bar */}
                   <div style={{ width: '100%', height: '8px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '4px', marginTop: '10px', overflow: 'hidden' }}>
-                    <div style={{ 
-                      width: `${totalVisits > 0 ? (approvedSchools / totalVisits) * 100 : 0}%`, 
-                      height: '100%', 
-                      backgroundColor: 'var(--approved)', 
+                    <div style={{
+                      width: `${totalVisits > 0 ? (approvedSchools / totalVisits) * 100 : 0}%`,
+                      height: '100%',
+                      backgroundColor: 'var(--approved)',
                       borderRadius: '4px',
                       transition: 'width 0.5s ease-out'
                     }} />
@@ -1649,8 +1647,8 @@ export default function Home() {
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
                               <span style={{ fontWeight: 500 }}>{city}</span>
                               <span style={{ color: 'var(--text-secondary)' }}>
-                                {language === 'en' 
-                                  ? `${count} client${count > 1 ? 's' : ''} (${pct}%)` 
+                                {language === 'en'
+                                  ? `${count} client${count > 1 ? 's' : ''} (${pct}%)`
                                   : `${count} ग्राहक (${pct}%)`}
                               </span>
                             </div>
@@ -1675,9 +1673,9 @@ export default function Home() {
             <div style={{ padding: '20px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <button 
-                    className="btn btn-secondary" 
-                    style={{ width: 'auto', padding: '6px 12px', fontSize: '12px' }} 
+                  <button
+                    className="btn btn-secondary"
+                    style={{ width: 'auto', padding: '6px 12px', fontSize: '12px' }}
                     onClick={() => setTab('dashboard')}
                   >
                     ← {t.back}
@@ -1736,7 +1734,7 @@ export default function Home() {
                           ✏️ {language === 'en' ? 'Edit' : 'संपादित करें'}
                         </button>
                       </div>
-                      
+
                       <div style={{ marginTop: '12px', fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         <div>📍 Address: {vendor.address || 'N/A'}</div>
                         <div>📞 Mobile: {vendor.mobile || 'N/A'} | ✉️ Email: {vendor.email || 'N/A'}</div>
@@ -1767,7 +1765,7 @@ export default function Home() {
                 <h3 className="section-card-title" style={{ marginBottom: '16px' }}>
                   ⚙️ {language === 'en' ? 'Admin Security Settings' : 'एडमिन सुरक्षा सेटिंग्स'}
                 </h3>
-                <form 
+                <form
                   onSubmit={(e) => {
                     e.preventDefault();
                     const fd = new FormData(e.currentTarget);
@@ -1830,8 +1828,8 @@ export default function Home() {
                 }} style={{ zIndex: 11100 }}>
                   <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
                     <h3 className="form-title">
-                      {selectedVendorForEdit 
-                        ? (language === 'en' ? 'Edit Vendor Account' : 'विक्रेता खाता संपादित करें') 
+                      {selectedVendorForEdit
+                        ? (language === 'en' ? 'Edit Vendor Account' : 'विक्रेता खाता संपादित करें')
                         : (language === 'en' ? 'Create New Vendor Account' : 'नया विक्रेता खाता बनाएं')}
                     </h3>
                     <form onSubmit={handleAddVendorSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -1918,7 +1916,7 @@ export default function Home() {
                         <span className="section-card-title" style={{ display: 'block', marginBottom: '12px' }}>
                           🌍 Allowed Cities Assignment
                         </span>
-                        
+
                         {/* Custom city input box */}
                         <div className="dynamic-tag-input-row" style={{ marginBottom: '12px' }}>
                           <input
@@ -2020,8 +2018,8 @@ export default function Home() {
                           {t.cancel}
                         </button>
                         <button type="submit" className="btn btn-primary">
-                          {selectedVendorForEdit 
-                            ? (language === 'en' ? 'Save Changes' : 'बदलाव सुरक्षित करें') 
+                          {selectedVendorForEdit
+                            ? (language === 'en' ? 'Save Changes' : 'बदलाव सुरक्षित करें')
                             : (language === 'en' ? 'Create Account' : 'खाता बनाएं')}
                         </button>
                       </div>
@@ -2079,7 +2077,7 @@ export default function Home() {
               <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                 <h3 className="form-title">{t.addNewClientVisit} ({activeCategory ? (t[activeCategory.toLowerCase() as keyof typeof t] || activeCategory) : ''})</h3>
                 <form onSubmit={handleAddVisitSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  
+
                   {/* Basic Visit info */}
                   <div className="section-card">
                     <div className="section-card-title">{t.schoolDetails}</div>
@@ -2106,7 +2104,7 @@ export default function Home() {
                         onChange={(e) => setNewAddress(e.target.value)}
                       />
                     </div>
-                    
+
                     <div className="form-row">
                       <div className="form-group" style={{ position: 'relative' }}>
                         <label className="form-label" htmlFor="new-city">{t.city}</label>
@@ -2340,7 +2338,7 @@ export default function Home() {
                   {/* Dynamic Sections builder */}
                   <div className="section-card">
                     <div className="section-card-title">{t.sections}</div>
-                    
+
                     {/* Yes/No switch for sections */}
                     <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', alignItems: 'center' }}>
                       <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)' }}>
@@ -2413,7 +2411,7 @@ export default function Home() {
                   {/* Dynamic Houses builder */}
                   <div className="section-card">
                     <div className="section-card-title">{t.houses}</div>
-                    
+
                     {/* Yes/No switch for houses */}
                     <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', alignItems: 'center' }}>
                       <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)' }}>
@@ -2496,12 +2494,12 @@ export default function Home() {
                               {house}
                               <button
                                 type="button"
-                                  className="dynamic-tag-remove"
-                                  onClick={() => setNewHouses(newHouses.filter((h) => h !== house))}
-                                >
-                                  &times;
-                                </button>
-                              </span>
+                                className="dynamic-tag-remove"
+                                onClick={() => setNewHouses(newHouses.filter((h) => h !== house))}
+                              >
+                                &times;
+                              </button>
+                            </span>
                           ))}
                         </div>
                       </div>
@@ -2554,7 +2552,7 @@ export default function Home() {
         <div className="modal-overlay" onClick={() => setIsCityPickerOpen(false)} style={{ zIndex: 11000 }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
             <h3 className="form-title">{language === 'en' ? 'Select City' : 'शहर चुनें'}</h3>
-            
+
             {/* Added cities list */}
             <div style={{ flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
               {customCities.length > 0 ? (

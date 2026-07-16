@@ -409,3 +409,27 @@ export default function ApprovalForm({ visit, onSave, onCancel, lang = 'en' }: A
     </form>
   );
 }
+<div className="form-group">
+  <label className="form-label">{lang === 'en' ? 'Hive ID Pass' : 'हाइव आईडी पासवर्ड'}</label>
+  <input
+    type="text"
+    className="form-input"
+    value={hiveIdPass}
+    onChange={(e) => setHiveIdPass(e.target.value)}
+    placeholder="Enter Hive ID Password"
+  />
+</div>
+        </div >
+      </div >
+
+  <div className="form-row" style={{ marginTop: '8px', marginBottom: '24px' }}>
+    <button type="button" className="btn btn-secondary" onClick={onCancel}>
+      {t.cancel}
+    </button>
+    <button type="submit" className="btn btn-success">
+      <Save size={18} /> {t.saveConfirm}
+    </button>
+  </div>
+    </form >
+  );
+}
