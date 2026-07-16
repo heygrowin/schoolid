@@ -115,6 +115,7 @@ export default function Home() {
   const [newVendorUser, setNewVendorUser] = useState('');
   const [newVendorPass, setNewVendorPass] = useState('');
   const [newVendorCities, setNewVendorCities] = useState<string[]>([]);
+  const [expandedCards, setExpandedCards] = useState<string[]>([]);
 
   // Save follow-up details
   const handleFollowUpSave = async (date: string, action: string, notes: string) => {
@@ -506,16 +507,19 @@ export default function Home() {
   // Filter visits by vendor assigned cities if a vendor is logged in
   const visibleVisits = visits.filter((v) => {
     if (!isAdminMode && currentVendor) {
-      // 1. If visit was created by this vendor, they MUST see it
+      // 1. If visit was created by this vendor, they can see it
       if (v.createdByVendorId === currentVendor.id) {
         return true;
       }
       
-      // 2. Otherwise, check if the visit city matches the vendor's assigned cities list (case-insensitive)
+      // 2. If it was created by admin or someone else: they only see it if it belongs to their allowed assigned cities AND was NOT explicitly created by another vendor (unless city matches)
       if (!v.city) return false;
       const lowerCity = v.city.trim().toLowerCase();
       const allowedLowers = currentVendor.allowedCities.map(c => c.trim().toLowerCase());
-      return allowedLowers.includes(lowerCity);
+      const isCityMatched = allowedLowers.includes(lowerCity);
+      
+      // If city matches, show it. Otherwise, hide it.
+      return isCityMatched;
     }
     return true;
   });
@@ -1259,74 +1263,130 @@ export default function Home() {
                 </div>
               ) : filteredVisits.length > 0 ? (
                 <div className="visit-card-list">
-                  {filteredVisits.map((visit) => (
-                    <div 
-                      key={visit.id} 
-                      className={`visit-card card-${visit.status.toLowerCase()}`}
-                      onClick={() => setSelectedVisit(visit)}
-                    >
-                      <div className="visit-card-header">
-                        <span className="visit-card-name">{visit.schoolName}</span>
-                        <span className={`badge ${
-                          visit.status === 'Approved' 
-                            ? 'badge-approved' 
-                            : visit.status === 'Rejected' 
-                              ? 'badge-rejected' 
-                              : visit.status === 'FollowUp'
-                                ? 'badge-followup'
-                                : 'badge-pending'
-                        }`}>
-                          {visit.status === 'Approved' 
-                            ? 'Approved ✅' 
-                            : visit.status === 'Rejected' 
-                              ? 'Rejected ❌' 
-                              : visit.status === 'FollowUp'
-                                ? 'Follow-Up 🔵'
-                                : 'Pending 🟡'}
-                        </span>
-                      </div>
-                      
-                      <div className="visit-card-details">
-                        {visit.city && (
-                          <div className="visit-card-row">
-                            <MapPin size={13} style={{ color: 'var(--primary)' }} />
-                            <span>{visit.city}</span>
-                          </div>
-                        )}
-                        <div className="visit-card-row">
-                          <Calendar size={13} style={{ color: 'var(--primary)' }} />
-                          <span>Visit: {formatDate(visit.visitDate)}</span>
-                        </div>
-                        {visit.range && (
-                          <div className="visit-card-row" style={{ color: 'var(--primary)', fontSize: '13px', fontWeight: 500 }}>
-                            <span>Range: {visit.range}</span>
-                          </div>
-                        )}
-                        {visit.notes && (
-                          <div className="visit-card-row" style={{ marginTop: '4px', fontStyle: 'italic', color: 'var(--text-muted)' }}>
-                            <span>"{visit.notes}"</span>
-                          </div>
-                        )}
-                        {visit.status === 'Rejected' && visit.rejectionReason && (
-                          <div className="visit-card-row" style={{ color: 'var(--rejected)', fontWeight: 500 }}>
-                            <span>{t.reason}: {visit.rejectionReason}</span>
-                          </div>
-                        )}
-                        {visit.status === 'FollowUp' && visit.followUpDate && (
-                          <div className="visit-card-row" style={{ color: 'var(--followup)', fontWeight: 500 }}>
-                            <span>{t.action}: {visit.followUpAction} ({formatDate(visit.followUpDate)})</span>
-                          </div>
-                        )}
-                        {visit.createdByVendorName && (
-                          <div className="visit-card-row" style={{ marginTop: '6px' }}>
-                            <span style={{ backgroundColor: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>
-                              👤 {visit.createdByVendorName}
+                  {filteredVisits.map((visit) => {
+                    const isExpanded = expandedCards.includes(visit.id);
+                    return (
+                      <div 
+                        key={visit.id} 
+                        className={`visit-card card-${visit.status.toLowerCase()}`}
+                        style={{ cursor: 'pointer', transition: 'all 0.2s ease', position: 'relative' }}
+                        onClick={() => {
+                          if (isExpanded) {
+                            setExpandedCards(expandedCards.filter(id => id !== visit.id));
+                          } else {
+                            setExpandedCards([...expandedCards, visit.id]);
+                          }
+                        }}
+                      >
+                        <div className="visit-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '18px', transition: 'transform 0.2s', display: 'inline-block', transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
+                              ▼
                             </span>
+                            <span className="visit-card-name" style={{ fontWeight: 700 }}>{visit.schoolName}</span>
+                          </div>
+                          <span className={`badge ${
+                            visit.status === 'Approved' 
+                              ? 'badge-approved' 
+                              : visit.status === 'Rejected' 
+                                ? 'badge-rejected' 
+                                : visit.status === 'FollowUp'
+                                  ? 'badge-followup'
+                                  : 'badge-pending'
+                          }`}>
+                            {visit.status === 'Approved' 
+                              ? 'Approved ✅' 
+                              : visit.status === 'Rejected' 
+                                ? 'Rejected ❌' 
+                                : visit.status === 'FollowUp'
+                                  ? 'Follow-Up 🔵'
+                                  : 'Pending 🟡'}
+                          </span>
+                        </div>
+                        
+                        {isExpanded && (
+                          <div className="visit-card-details" style={{ marginTop: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }} onClick={(e) => e.stopPropagation()}>
+                            {/* Contact Action call triggers */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              {visit.schoolDetails?.principalName && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                                  <span>Principal: <strong>{visit.schoolDetails.principalName}</strong></span>
+                                  {visit.schoolDetails.principalMobile && (
+                                    <a 
+                                      href={`tel:${visit.schoolDetails.principalMobile}`}
+                                      style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: 'rgba(16, 185, 129, 0.15)', color: 'var(--approved)', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, textDecoration: 'none' }}
+                                    >
+                                      📞 Call
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+                              
+                              {visit.idIncharge?.name && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                                  <span>Incharge: <strong>{visit.idIncharge.name}</strong></span>
+                                  {visit.idIncharge.mobile && (
+                                    <a 
+                                      href={`tel:${visit.idIncharge.mobile}`}
+                                      style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: 'rgba(99, 102, 241, 0.15)', color: 'var(--primary)', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, textDecoration: 'none' }}
+                                    >
+                                      📞 Call
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+
+                              {visit.reception?.name && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                                  <span>Reception: <strong>{visit.reception.name}</strong></span>
+                                  {visit.reception.mobile && (
+                                    <a 
+                                      href={`tel:${visit.reception.mobile}`}
+                                      style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, textDecoration: 'none' }}
+                                    >
+                                      📞 Call
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* City and date details */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: 'var(--text-secondary)', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '8px' }}>
+                              {visit.city && <div>📍 City: {visit.city}</div>}
+                              <div>📅 Visit Date: {formatDate(visit.visitDate)}</div>
+                              {visit.range && <div>📏 Range: {visit.range}</div>}
+                              {visit.notes && <div style={{ fontStyle: 'italic', marginTop: '2px' }}>"{visit.notes}"</div>}
+                              {visit.status === 'Rejected' && visit.rejectionReason && (
+                                <div style={{ color: 'var(--rejected)', fontWeight: 500 }}>Reason: {visit.rejectionReason}</div>
+                              )}
+                              {visit.status === 'FollowUp' && visit.followUpDate && (
+                                <div style={{ color: 'var(--followup)', fontWeight: 500 }}>Action: {visit.followUpAction} ({formatDate(visit.followUpDate)})</div>
+                              )}
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '8px' }}>
+                              {visit.createdByVendorName ? (
+                                <span style={{ backgroundColor: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>
+                                  👤 Created by: {visit.createdByVendorName}
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>👤 Created by: Admin</span>
+                              )}
+                              
+                              <button 
+                                className="btn btn-primary"
+                                style={{ width: 'auto', padding: '4px 10px', fontSize: '11px' }}
+                                onClick={() => setSelectedVisit(visit)}
+                              >
+                                View/Edit Full Form
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div style={{ textAlign: 'center', padding: '60px 40px', color: 'var(--text-secondary)' }}>
