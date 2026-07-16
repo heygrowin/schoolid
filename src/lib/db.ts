@@ -20,6 +20,7 @@ export interface SchoolVisit {
   notes?: string;
   range?: string;
   status: 'Pending' | 'Approved' | 'Rejected' | 'FollowUp';
+  category?: 'School' | 'Collage' | 'Office' | 'Hospital' | 'Studio' | 'Other';
   rejectionReason?: string;
   followUpDate?: string;
   followUpAction?: string;
@@ -304,5 +305,101 @@ export const dbService = {
         console.error('Firestore saveCity error:', error);
       }
     }
+  },
+
+  async getVendors(): Promise<Vendor[]> {
+    if (this.isCloudConnected() && db) {
+      try {
+        const q = query(collection(db, 'vendors'), orderBy('createdAt', 'desc'));
+        const querySnapshot = await getDocs(q);
+        const vendors: Vendor[] = [];
+        querySnapshot.forEach((docSnap) => {
+          vendors.push({
+            id: docSnap.id,
+            ...docSnap.data()
+          } as Vendor);
+        });
+        return vendors;
+      } catch (error) {
+        console.error('Firestore vendors read error:', error);
+        return getLocalVendors();
+      }
+    } else {
+      return getLocalVendors();
+    }
+  },
+
+  async saveVendor(vendorData: Omit<Vendor, 'id' | 'createdAt'>): Promise<Vendor> {
+    const now = new Date().toISOString();
+    const vendorId = 'vendor_' + Math.random().toString(36).substring(2, 11);
+    const newVendor: Vendor = {
+      id: vendorId,
+      ...vendorData,
+      createdAt: now
+    };
+
+    const localVendors = getLocalVendors();
+    localVendors.push(newVendor);
+    saveLocalVendors(localVendors);
+
+    if (this.isCloudConnected() && db) {
+      try {
+        const docRef = doc(db, 'vendors', vendorId);
+        await setDoc(docRef, cleanUndefined(newVendor));
+      } catch (error) {
+        console.error('Firestore saveVendor error:', error);
+      }
+    }
+    return newVendor;
+  },
+
+  async updateVendor(vendorId: string, vendorData: Partial<Omit<Vendor, 'id' | 'createdAt'>>): Promise<void> {
+    const localVendors = getLocalVendors();
+    const idx = localVendors.findIndex(v => v.id === vendorId);
+    if (idx !== -1) {
+      localVendors[idx] = { ...localVendors[idx], ...vendorData };
+      saveLocalVendors(localVendors);
+    }
+
+    if (this.isCloudConnected() && db) {
+      try {
+        const docRef = doc(db, 'vendors', vendorId);
+        await setDoc(docRef, cleanUndefined(vendorData), { merge: true });
+      } catch (error) {
+        console.error('Firestore updateVendor error:', error);
+      }
+    }
   }
+};
+
+export interface Vendor {
+  id: string;
+  name: string;
+  firmName: string;
+  address: string;
+  mobile: string;
+  email: string;
+  allowedCities: string[];
+  user: string;
+  pass: string;
+  createdAt: string;
+}
+
+const LOCAL_VENDORS_KEY = 'acl_vendors';
+
+const getLocalVendors = (): Vendor[] => {
+  if (typeof window === 'undefined') return [];
+  const raw = localStorage.getItem(LOCAL_VENDORS_KEY);
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error('Failed to parse local vendors:', e);
+    return [];
+  }
+};
+
+const saveLocalVendors = (vendors: Vendor[]) => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(LOCAL_VENDORS_KEY, JSON.stringify(vendors));
 };

@@ -1,19 +1,21 @@
 'use client';
 
 import React from 'react';
-import { Home, Calendar, School } from 'lucide-react';
+import { Home, Calendar, School, Settings } from 'lucide-react';
 
 interface BottomNavProps {
-  currentTab: 'dashboard' | 'visits' | 'schools';
-  setTab: (tab: 'dashboard' | 'visits' | 'schools') => void;
+  currentTab: 'dashboard' | 'visits' | 'schools' | 'admin' | 'analysis';
+  setTab: (tab: 'dashboard' | 'visits' | 'schools' | 'admin' | 'analysis') => void;
+  isAdminMode?: boolean;
 }
 
-export default function BottomNav({ currentTab, setTab }: BottomNavProps) {
-  const tabs = [
+export default function BottomNav({ currentTab, setTab, isAdminMode = true }: BottomNavProps) {
+  const tabs: Array<{ id: 'dashboard' | 'visits' | 'schools' | 'admin' | 'analysis'; label: string; icon: any }> = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'visits', label: 'Visits', icon: Calendar },
     { id: 'schools', label: 'Schools', icon: School },
-  ] as const;
+    ...(isAdminMode ? [{ id: 'admin' as const, label: 'Admin', icon: Settings }] : [])
+  ];
 
   return (
     <nav className="bottom-nav">

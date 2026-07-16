@@ -297,7 +297,7 @@ export default function ApprovalForm({ visit, onSave, onCancel, lang = 'en' }: A
                 checked={cardTypes.includes(type)}
                 onChange={() => handleCardTypeChange(type)}
               />
-              <span>{type === 'Student' ? t.student : type === 'Staff' ? t.staff : type === 'Bus' ? t.bus : type === 'Other' ? t.other : type}</span>
+              <span>{type === 'Student' ? t.student : type === 'Staff' ? t.staff : type === 'Bus' ? t.bus : type === 'Other' ? t.cardOther : type}</span>
             </label>
           ))}
         </div>
