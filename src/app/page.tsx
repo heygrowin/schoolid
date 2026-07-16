@@ -287,6 +287,8 @@ export default function Home() {
       sections: hasSections ? newSections : [],
       houses: hasHouses ? newHouses : [],
       additionalNotes: newAdditionalNotes,
+      createdByVendorId: !isAdminMode && currentVendor ? currentVendor.id : undefined,
+      createdByVendorName: !isAdminMode && currentVendor ? currentVendor.name : undefined,
     };
 
     try {
@@ -1306,6 +1308,13 @@ export default function Home() {
                             <span>{t.action}: {visit.followUpAction} ({formatDate(visit.followUpDate)})</span>
                           </div>
                         )}
+                        {visit.createdByVendorName && (
+                          <div className="visit-card-row" style={{ marginTop: '6px' }}>
+                            <span style={{ backgroundColor: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>
+                              👤 {visit.createdByVendorName}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1478,6 +1487,11 @@ export default function Home() {
                           {visit.range && (
                             <span>
                               Range: {visit.range}
+                            </span>
+                          )}
+                          {visit.createdByVendorName && (
+                            <span style={{ backgroundColor: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>
+                              👤 {visit.createdByVendorName}
                             </span>
                           )}
                         </div>

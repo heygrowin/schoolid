@@ -51,6 +51,8 @@ export interface SchoolVisit {
   additionalNotes?: string;
   createdAt: string;
   updatedAt: string;
+  createdByVendorId?: string;
+  createdByVendorName?: string;
 }
 
 // Helper to strip out all 'undefined' properties recursively before sending to Firestore
