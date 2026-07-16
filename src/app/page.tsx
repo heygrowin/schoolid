@@ -1059,7 +1059,7 @@ export default function Home() {
                     {!isAdminMode && currentVendor ? 'Dashboard' : 'Admin Dashbord'}
                   </h1>
                 </div>
-                
+
                 <div className="bubble-top-row">
                   <div className="bubble-left-container">
                     <button 
@@ -1112,49 +1112,45 @@ export default function Home() {
                       <span className="bubble-small-title">{t.pending}</span>
                       <span className="bubble-small-value">{pendingVisits}</span>
                     </button>
+
+                    <button 
+                      className="bubble-small" 
+                      onClick={() => {
+                        setActiveCategory(null);
+                        setTab('visits');
+                        setStatusFilter('Rejected');
+                      }}
+                    >
+                      <span className="bubble-small-title">{t.declined}</span>
+                      <span className="bubble-small-value">{rejectedSchools}</span>
+                    </button>
+
+                    <button 
+                      className="bubble-small" 
+                      onClick={() => {
+                        setActiveCategory(null);
+                        setTab('visits');
+                        setStatusFilter('All');
+                        const todayStr = new Date().toISOString().split('T')[0];
+                        setSearchQuery(todayStr);
+                      }}
+                    >
+                      <span className="bubble-small-title">{t.todays}</span>
+                      <span className="bubble-small-value">{todayVisits}</span>
+                    </button>
                   </div>
-                </div>
-
-                <div className="bubble-bottom-row">
-                  <button 
-                    className="bubble-small" 
-                    style={{ width: '100px', flexGrow: 0 }}
-                    onClick={() => {
-                      setActiveCategory(null);
-                      setTab('visits');
-                      setStatusFilter('Rejected');
-                    }}
-                  >
-                    <span className="bubble-small-title">{t.declined}</span>
-                    <span className="bubble-small-value">{rejectedSchools}</span>
-                  </button>
-
-                  <button 
-                    className="bubble-small" 
-                    style={{ width: '100px', flexGrow: 0 }}
-                    onClick={() => {
-                      setActiveCategory(null);
-                      setTab('visits');
-                      setStatusFilter('All');
-                      const todayStr = new Date().toISOString().split('T')[0];
-                      setSearchQuery(todayStr);
-                    }}
-                  >
-                    <span className="bubble-small-title">{t.todays}</span>
-                    <span className="bubble-small-value">{todayVisits}</span>
-                  </button>
                 </div>
 
                 {/* Big Admin Button (hidden for logged-in salesman vendors) */}
                 {(isAdminMode || !currentVendor) && (
-                  <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'center', width: '100%' }}>
+                  <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center', width: '100%' }}>
                     <button className="admin-pill-button" onClick={() => { setActiveCategory(null); setTab('admin'); setStatusFilter('All'); setSearchQuery(''); }}>
                       {t.adminLabel}
                     </button>
                   </div>
                 )}
               </div>
-
+              
               {/* Redesigned 6-Category Grid Layout */}
               <div>
                 <div className="category-grid">
