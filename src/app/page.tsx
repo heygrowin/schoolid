@@ -1055,7 +1055,9 @@ export default function Home() {
               {/* Custom Bubble metrics layout */}
               <div className="bubble-metric-container">
                 <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-start', paddingLeft: '8px', marginBottom: '4px' }}>
-                  <h1 style={{ fontSize: '32px', fontWeight: 900, color: '#000000', margin: 0, fontFamily: 'serif' }}>Admin Dashbord</h1>
+                  <h1 style={{ fontSize: '32px', fontWeight: 900, color: '#000000', margin: 0, fontFamily: 'serif' }}>
+                    {!isAdminMode && currentVendor ? 'Dashboard' : 'Admin Dashbord'}
+                  </h1>
                 </div>
                 
                 <div className="bubble-top-row">
@@ -1143,12 +1145,14 @@ export default function Home() {
                   </button>
                 </div>
 
-                {/* Big Admin Button */}
-                <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'center', width: '100%' }}>
-                  <button className="admin-pill-button" onClick={() => { setActiveCategory(null); setTab('admin'); setStatusFilter('All'); setSearchQuery(''); }}>
-                    {t.adminLabel}
-                  </button>
-                </div>
+                {/* Big Admin Button (hidden for logged-in salesman vendors) */}
+                {(isAdminMode || !currentVendor) && (
+                  <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'center', width: '100%' }}>
+                    <button className="admin-pill-button" onClick={() => { setActiveCategory(null); setTab('admin'); setStatusFilter('All'); setSearchQuery(''); }}>
+                      {t.adminLabel}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Redesigned 6-Category Grid Layout */}
