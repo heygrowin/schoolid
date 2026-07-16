@@ -423,7 +423,8 @@ export default function Home() {
     setCurrentVendor(null);
     setIsAdminMode(true); // default back to Owner view (which requires login/logout to toggle)
     localStorage.removeItem('currentVendor');
-    alert('Logged out from vendor session.');
+    localStorage.removeItem('site_authenticated');
+    alert('Logged out from session.');
   };
 
   // Reject handler
@@ -505,8 +506,16 @@ export default function Home() {
   // Filter visits by vendor assigned cities if a vendor is logged in
   const visibleVisits = visits.filter((v) => {
     if (!isAdminMode && currentVendor) {
+      // 1. If visit was created by this vendor, they MUST see it
+      if (v.createdByVendorId === currentVendor.id) {
+        return true;
+      }
+      
+      // 2. Otherwise, check if the visit city matches the vendor's assigned cities list (case-insensitive)
       if (!v.city) return false;
-      return currentVendor.allowedCities.includes(v.city);
+      const lowerCity = v.city.trim().toLowerCase();
+      const allowedLowers = currentVendor.allowedCities.map(c => c.trim().toLowerCase());
+      return allowedLowers.includes(lowerCity);
     }
     return true;
   });
