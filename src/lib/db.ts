@@ -1,12 +1,12 @@
-import {
-  collection,
-  getDocs,
-  addDoc,
+import { 
+  collection, 
+  getDocs, 
+  addDoc, 
   setDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  query,
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  query, 
   orderBy,
   Timestamp
 } from 'firebase/firestore';
@@ -129,13 +129,13 @@ export const dbService = {
         const visits: SchoolVisit[] = [];
         querySnapshot.forEach((docSnap) => {
           const data = docSnap.data();
-          const createdAt = data.createdAt instanceof Timestamp
-            ? data.createdAt.toDate().toISOString()
+          const createdAt = data.createdAt instanceof Timestamp 
+            ? data.createdAt.toDate().toISOString() 
             : data.createdAt || new Date().toISOString();
-          const updatedAt = data.updatedAt instanceof Timestamp
-            ? data.updatedAt.toDate().toISOString()
+          const updatedAt = data.updatedAt instanceof Timestamp 
+            ? data.updatedAt.toDate().toISOString() 
             : data.updatedAt || new Date().toISOString();
-
+            
           visits.push({
             id: docSnap.id,
             ...data,
@@ -156,13 +156,13 @@ export const dbService = {
   async saveVisit(visitData: Omit<SchoolVisit, 'id' | 'createdAt' | 'updatedAt'>): Promise<SchoolVisit> {
     const now = new Date().toISOString();
     const isOnline = typeof window !== 'undefined' ? navigator.onLine : true;
-
+    
     if (this.isCloudConnected() && db) {
       try {
         const cleanedData = cleanUndefined(visitData);
         const docRef = doc(collection(db, 'visits'));
         const newId = docRef.id;
-
+        
         const dataToSave = {
           ...cleanedData,
           createdAt: now,
@@ -290,7 +290,7 @@ export const dbService = {
   async saveCity(cityName: string): Promise<void> {
     const name = cityName.trim();
     if (!name) return;
-
+    
     // Add to Local Storage fallback
     const localCities = getLocalCities();
     if (!localCities.includes(name)) {

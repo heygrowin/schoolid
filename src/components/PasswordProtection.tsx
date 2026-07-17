@@ -34,9 +34,9 @@ export default function PasswordProtection({ children }: { children: React.React
     e.preventDefault();
     const u = username.trim().toLowerCase();
     const p = password.trim();
-
-    // Get Admin/Owner password from local storage or default to Pass@ansh
-    const adminPass = localStorage.getItem("admin_password") || "Pass@ansh";
+    
+    // Get Admin/Owner password from local storage or default to admin123
+    const adminPass = localStorage.getItem("admin_password") || "admin123";
 
     if (u === "admin" && p === adminPass) {
       localStorage.setItem("site_authenticated", "true");
@@ -59,7 +59,7 @@ export default function PasswordProtection({ children }: { children: React.React
   };
 
   if (isAuthenticated === null) {
-    return null;
+    return null; 
   }
 
   if (isAuthenticated) {

@@ -77,15 +77,22 @@ export default function Home() {
   const [newClassFrom, setNewClassFrom] = useState('I');
   const [newClassTo, setNewClassTo] = useState('XII');
   const [newCardTypes, setNewCardTypes] = useState<string[]>(['Student']);
-  const [newSections, setNewSections] = useState<string[]>(['A', 'B', 'C', 'D']);
+  const [newSections, setNewSections] = useState<string[]>(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
   const [newHouses, setNewHouses] = useState<string[]>([]);
 
-  const [hasSections, setHasSections] = useState<boolean>(true);
-  const [hasHouses, setHasHouses] = useState<boolean>(true);
+  const [hasSections, setHasSections] = useState<boolean>(false);
+  const [hasHouses, setHasHouses] = useState<boolean>(false);
 
   const [newSectionInput, setNewSectionInput] = useState('');
   const [newHouseInput, setNewHouseInput] = useState('');
   const [newAdditionalNotes, setNewAdditionalNotes] = useState('');
+  const [newStatus, setNewStatus] = useState<'Pending' | 'Approved' | 'Rejected' | 'FollowUp'>('Pending');
+  const [newRejectionReason, setNewRejectionReason] = useState('');
+  const [newFollowUpDate, setNewFollowUpDate] = useState(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  });
+  const [newFollowUpNotes, setNewFollowUpNotes] = useState('');
 
   // City picker states
   const [customCities, setCustomCities] = useState<string[]>([]);
@@ -262,7 +269,11 @@ export default function Home() {
       visitDate: newVisitDate,
       notes: newNotes.trim() || undefined,
       range: newRange.trim() || undefined,
-      status: 'Pending' as const,
+      status: newStatus,
+      rejectionReason: newStatus === 'Rejected' ? newRejectionReason : undefined,
+      followUpDate: newStatus === 'FollowUp' ? newFollowUpDate : undefined,
+      followUpNotes: newStatus === 'FollowUp' ? newFollowUpNotes : undefined,
+      followUpAction: newStatus === 'FollowUp' ? newFollowUpNotes : undefined,
       category: activeCategory || undefined,
       schoolDetails: {
         address: newAddress,
@@ -324,6 +335,10 @@ export default function Home() {
       setNewSectionInput('');
       setNewHouseInput('');
       setNewAdditionalNotes('');
+      setNewStatus('Pending');
+      setNewRejectionReason('');
+      setNewFollowUpDate(new Date().toISOString().split('T')[0]);
+      setNewFollowUpNotes('');
 
       setIsAddingVisit(false);
 
@@ -547,14 +562,16 @@ export default function Home() {
     // 0. Filter by active category if set
     if (activeCategory && v.category !== activeCategory) return false;
 
-    // 1. Search Query filter (matches School Name, Principal, Status, City, or Range)
+    // 1. Search Query filter (matches School Name, Principal, Status, City, Range, or Vendor)
     const query = searchQuery.toLowerCase().trim();
     const matchesSearch =
       v.schoolName.toLowerCase().includes(query) ||
       (v.schoolDetails?.principalName && v.schoolDetails.principalName.toLowerCase().includes(query)) ||
       v.status.toLowerCase().includes(query) ||
       (v.range && v.range.toLowerCase().includes(query)) ||
-      (v.city && v.city.toLowerCase().includes(query));
+      (v.city && v.city.toLowerCase().includes(query)) ||
+      (v.createdByVendorName && v.createdByVendorName.toLowerCase().includes(query)) ||
+      (!v.createdByVendorName && ('admin'.includes(query) || 'एडमिन'.includes(query)));
 
     // 2. Status Tab Filter
     if (statusFilter === 'All') return matchesSearch;
@@ -569,7 +586,9 @@ export default function Home() {
       v.schoolName.toLowerCase().includes(query) ||
       (v.schoolDetails?.principalName && v.schoolDetails.principalName.toLowerCase().includes(query)) ||
       (v.range && v.range.toLowerCase().includes(query)) ||
-      (v.city && v.city.toLowerCase().includes(query))
+      (v.city && v.city.toLowerCase().includes(query)) ||
+      (v.createdByVendorName && v.createdByVendorName.toLowerCase().includes(query)) ||
+      (!v.createdByVendorName && ('admin'.includes(query) || 'एडमिन'.includes(query)))
     );
   });
 
@@ -666,7 +685,7 @@ export default function Home() {
       </header>
 
       {/* Screen Routing */}
-      {selectedVisit ? (
+      {selectedVisit && !isApproving && !isRejecting && !isSchedulingFollowUp ? (
         /* DETAIL PAGE / WORKFLOW VIEW */
         <div className="details-container">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -698,12 +717,12 @@ export default function Home() {
             </h2>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
               <span className={`badge ${selectedVisit.status === 'Approved'
-                  ? 'badge-approved'
-                  : selectedVisit.status === 'Rejected'
-                    ? 'badge-rejected'
-                    : selectedVisit.status === 'FollowUp'
-                      ? 'badge-followup'
-                      : 'badge-pending'
+                ? 'badge-approved'
+                : selectedVisit.status === 'Rejected'
+                  ? 'badge-rejected'
+                  : selectedVisit.status === 'FollowUp'
+                    ? 'badge-followup'
+                    : 'badge-pending'
                 }`}>
                 {selectedVisit.status === 'Approved'
                   ? (language === 'en' ? 'Confirmed ✅' : 'पुष्टि की गई ✅')
@@ -720,7 +739,7 @@ export default function Home() {
               )}
               {selectedVisit.range && (
                 <span style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: '4px', borderLeft: '1px solid var(--border-color)', paddingLeft: '8px' }}>
-                  {language === 'en' ? 'Range' : 'रेंज'}: {selectedVisit.range}
+                  {language === 'en' ? 'Total Strength' : 'कुल संख्या'}: {selectedVisit.range}
                 </span>
               )}
             </div>
@@ -776,7 +795,28 @@ export default function Home() {
           {isApproving && (
             /* Detailed Approval Form */
             <div className="section-card" style={{ padding: '16px 12px' }}>
-              <h3 className="form-title" style={{ marginTop: 0 }}>{t.clientRegistrationForm}</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsApproving(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '4px',
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(255,255,255,0.05)'
+                  }}
+                  aria-label="Back"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <h3 className="form-title" style={{ margin: 0 }}>{t.clientRegistrationForm}</h3>
+              </div>
               <ApprovalForm
                 visit={selectedVisit}
                 onSave={handleApproveSave}
@@ -1068,101 +1108,94 @@ export default function Home() {
             <div style={{ padding: '0 0 20px 0' }}>
               {/* Custom Bubble metrics layout */}
               <div className="bubble-metric-container">
-                <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-start', paddingLeft: '8px', marginBottom: '4px' }}>
-                  <h1 style={{ fontSize: '32px', fontWeight: 900, color: '#000000', margin: 0, fontFamily: 'serif' }}>
+                <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: '4px', paddingRight: '4px', marginBottom: '2px' }}>
+                  <h1 style={{ fontSize: '24px', fontWeight: 900, color: '#000000', margin: 0, fontFamily: 'serif' }}>
                     {!isAdminMode && currentVendor ? 'Dashboard' : 'Admin Dashbord'}
                   </h1>
-                </div>
-
-                <div className="bubble-top-row">
-                  <div className="bubble-left-container">
-                    <button
-                      className="bubble-total"
-                      onClick={() => {
-                        setActiveCategory(null);
-                        setTab('visits');
-                        setStatusFilter('All');
-                        setSearchQuery('');
-                      }}
-                    >
-                      <span className="bubble-total-title">{t.totalClient}</span>
-                      <span className="bubble-total-value">{totalVisits}</span>
-                    </button>
-                  </div>
-
-                  <div className="bubble-right-grid">
-                    <button
-                      className="bubble-small"
-                      onClick={() => {
-                        setActiveCategory(null);
-                        setTab('visits');
-                        setStatusFilter('Approved');
-                      }}
-                    >
-                      <span className="bubble-small-title">{t.confirmed}</span>
-                      <span className="bubble-small-value">{approvedSchools}</span>
-                    </button>
-
-                    <button
-                      className="bubble-small"
-                      onClick={() => {
-                        setActiveCategory(null);
-                        setTab('visits');
-                        setStatusFilter('FollowUp');
-                      }}
-                    >
-                      <span className="bubble-small-title">{t.followUpsBubble}</span>
-                      <span className="bubble-small-value">{followUpVisits}</span>
-                    </button>
-
-                    <button
-                      className="bubble-small"
-                      onClick={() => {
-                        setActiveCategory(null);
-                        setTab('visits');
-                        setStatusFilter('Pending');
-                      }}
-                    >
-                      <span className="bubble-small-title">{t.pending}</span>
-                      <span className="bubble-small-value">{pendingVisits}</span>
-                    </button>
-
-                    <button
-                      className="bubble-small"
-                      onClick={() => {
-                        setActiveCategory(null);
-                        setTab('visits');
-                        setStatusFilter('Rejected');
-                      }}
-                    >
-                      <span className="bubble-small-title">{t.declined}</span>
-                      <span className="bubble-small-value">{rejectedSchools}</span>
-                    </button>
-
-                    <button
-                      className="bubble-small"
-                      onClick={() => {
-                        setActiveCategory(null);
-                        setTab('visits');
-                        setStatusFilter('All');
-                        const todayStr = new Date().toISOString().split('T')[0];
-                        setSearchQuery(todayStr);
-                      }}
-                    >
-                      <span className="bubble-small-title">{t.todays}</span>
-                      <span className="bubble-small-value">{todayVisits}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Big Admin Button (hidden for logged-in salesman vendors) */}
-                {(isAdminMode || !currentVendor) && (
-                  <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center', width: '100%' }}>
-                    <button className="admin-pill-button" onClick={() => { setActiveCategory(null); setTab('admin'); setStatusFilter('All'); setSearchQuery(''); }}>
+                  {(isAdminMode || !currentVendor) && (
+                    <button className="admin-header-button" onClick={() => { setActiveCategory(null); setTab('admin'); setStatusFilter('All'); setSearchQuery(''); }}>
                       {t.adminLabel}
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
+
+                <div className="bubble-grid-3x2">
+                  <button
+                    className="bubble-small"
+                    onClick={() => {
+                      setActiveCategory(null);
+                      setTab('visits');
+                      setStatusFilter('All');
+                      setSearchQuery('');
+                    }}
+                  >
+                    <span className="bubble-small-title">{t.totalClient}</span>
+                    <span className="bubble-small-value">{totalVisits}</span>
+                  </button>
+
+                  <button
+                    className="bubble-small"
+                    onClick={() => {
+                      setActiveCategory(null);
+                      setTab('visits');
+                      setStatusFilter('Approved');
+                    }}
+                  >
+                    <span className="bubble-small-title">{t.confirmed}</span>
+                    <span className="bubble-small-value">{approvedSchools}</span>
+                  </button>
+
+                  <button
+                    className="bubble-small"
+                    onClick={() => {
+                      setActiveCategory(null);
+                      setTab('visits');
+                      setStatusFilter('FollowUp');
+                    }}
+                  >
+                    <span className="bubble-small-title">{t.followUpsBubble}</span>
+                    <span className="bubble-small-value">{followUpVisits}</span>
+                  </button>
+
+                  <button
+                    className="bubble-small"
+                    onClick={() => {
+                      setActiveCategory(null);
+                      setTab('visits');
+                      setStatusFilter('Pending');
+                    }}
+                  >
+                    <span className="bubble-small-title">{t.pending}</span>
+                    <span className="bubble-small-value">{pendingVisits}</span>
+                  </button>
+
+                  <button
+                    className="bubble-small"
+                    onClick={() => {
+                      setActiveCategory(null);
+                      setTab('visits');
+                      setStatusFilter('Rejected');
+                    }}
+                  >
+                    <span className="bubble-small-title">{t.declined}</span>
+                    <span className="bubble-small-value">{rejectedSchools}</span>
+                  </button>
+
+                  <button
+                    className="bubble-small"
+                    onClick={() => {
+                      setActiveCategory(null);
+                      setTab('visits');
+                      setStatusFilter('All');
+                      const todayStr = new Date().toISOString().split('T')[0];
+                      setSearchQuery(todayStr);
+                    }}
+                  >
+                    <span className="bubble-small-title">{t.todays}</span>
+                    <span className="bubble-small-value">{todayVisits}</span>
+                  </button>
+                </div>
+
               </div>
 
               {/* Redesigned 6-Category Grid Layout */}
@@ -1186,10 +1219,12 @@ export default function Home() {
                         setSearchQuery('');
                       }}
                     >
-                      <span className="category-card-title">{cat.title}</span>
                       <div className="category-card-icon-container">
                         <img src={cat.icon} alt={cat.title} />
                       </div>
+                      <span className="category-card-title">
+                        {t[cat.key.toLowerCase() as keyof typeof t] || cat.key}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -1203,8 +1238,19 @@ export default function Home() {
               <div className="search-container">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <button
-                    className="btn btn-secondary"
-                    style={{ width: 'auto', padding: '6px 12px', fontSize: '12px' }}
+                    className="btn btn-danger"
+                    style={{
+                      width: 'auto',
+                      padding: '8px 16px',
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      backgroundColor: '#ef4444',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '12px',
+                      boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)',
+                      cursor: 'pointer'
+                    }}
                     onClick={() => { setTab('dashboard'); setSearchQuery(''); setActiveCategory(null); }}
                   >
                     ← {t.back}
@@ -1278,19 +1324,33 @@ export default function Home() {
                         }}
                       >
                         <div className="visit-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '18px', transition: 'transform 0.2s', display: 'inline-block', transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                            <span style={{ fontSize: '18px', transition: 'transform 0.2s', display: 'inline-block', marginTop: '2px', transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
                               ▼
                             </span>
-                            <span className="visit-card-name" style={{ fontWeight: 700 }}>{visit.schoolName}</span>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span className="visit-card-name" style={{ fontWeight: 700, fontSize: '15px' }}>
+                                {visit.schoolName.length > 30 ? visit.schoolName.substring(0, 30) + '...' : visit.schoolName}
+                              </span>
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '2px' }}>
+                                {visit.city && (
+                                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                    📍 {visit.city}
+                                  </span>
+                                )}
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                  👤 {visit.createdByVendorName || (language === 'en' ? 'Admin' : 'एडमिन')}
+                                </span>
+                              </div>
+                            </div>
                           </div>
                           <span className={`badge ${visit.status === 'Approved'
-                              ? 'badge-approved'
-                              : visit.status === 'Rejected'
-                                ? 'badge-rejected'
-                                : visit.status === 'FollowUp'
-                                  ? 'badge-followup'
-                                  : 'badge-pending'
+                            ? 'badge-approved'
+                            : visit.status === 'Rejected'
+                              ? 'badge-rejected'
+                              : visit.status === 'FollowUp'
+                                ? 'badge-followup'
+                                : 'badge-pending'
                             }`}>
                             {visit.status === 'Approved'
                               ? 'Approved ✅'
@@ -1308,7 +1368,12 @@ export default function Home() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                               {visit.schoolDetails?.principalName && (
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                                  <span>Principal: <strong>{visit.schoolDetails.principalName}</strong></span>
+                                  <span>
+                                    Principal: <strong>{visit.schoolDetails.principalName}</strong>
+                                    {visit.schoolDetails.principalMobile && (
+                                      <span style={{ color: 'var(--text-secondary)', marginLeft: '4px' }}>({visit.schoolDetails.principalMobile})</span>
+                                    )}
+                                  </span>
                                   {visit.schoolDetails.principalMobile && (
                                     <a
                                       href={`tel:${visit.schoolDetails.principalMobile}`}
@@ -1322,7 +1387,12 @@ export default function Home() {
 
                               {visit.idIncharge?.name && (
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                                  <span>Incharge: <strong>{visit.idIncharge.name}</strong></span>
+                                  <span>
+                                    Incharge: <strong>{visit.idIncharge.name}</strong>
+                                    {visit.idIncharge.mobile && (
+                                      <span style={{ color: 'var(--text-secondary)', marginLeft: '4px' }}>({visit.idIncharge.mobile})</span>
+                                    )}
+                                  </span>
                                   {visit.idIncharge.mobile && (
                                     <a
                                       href={`tel:${visit.idIncharge.mobile}`}
@@ -1336,7 +1406,12 @@ export default function Home() {
 
                               {visit.reception?.name && (
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                                  <span>Reception: <strong>{visit.reception.name}</strong></span>
+                                  <span>
+                                    Reception: <strong>{visit.reception.name}</strong>
+                                    {visit.reception.mobile && (
+                                      <span style={{ color: 'var(--text-secondary)', marginLeft: '4px' }}>({visit.reception.mobile})</span>
+                                    )}
+                                  </span>
                                   {visit.reception.mobile && (
                                     <a
                                       href={`tel:${visit.reception.mobile}`}
@@ -1353,8 +1428,25 @@ export default function Home() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: 'var(--text-secondary)', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '8px' }}>
                               {visit.city && <div>📍 City: {visit.city}</div>}
                               <div>📅 Visit Date: {formatDate(visit.visitDate)}</div>
-                              {visit.range && <div>📏 Range: {visit.range}</div>}
+                              {visit.range && <div>📏 Total Strength: {visit.range}</div>}
                               {visit.notes && <div style={{ fontStyle: 'italic', marginTop: '2px' }}>"{visit.notes}"</div>}
+                              
+                              {visit.classes && (
+                                <div>🏫 Classes: {visit.classes.from} to {visit.classes.to}</div>
+                              )}
+                              {visit.cardTypes && visit.cardTypes.length > 0 && (
+                                <div>🪪 Card Types: {visit.cardTypes.join(', ')}</div>
+                              )}
+                              {visit.sections && visit.sections.length > 0 && (
+                                <div>🗂️ Sections: {visit.sections.join(', ')}</div>
+                              )}
+                              {visit.houses && visit.houses.length > 0 && (
+                                <div>🏠 Houses: {visit.houses.join(', ')}</div>
+                              )}
+                              {visit.additionalNotes && (
+                                <div style={{ fontStyle: 'italic', marginTop: '2px' }}>📝 Additional Notes: "{visit.additionalNotes}"</div>
+                              )}
+
                               {visit.status === 'Rejected' && visit.rejectionReason && (
                                 <div style={{ color: 'var(--rejected)', fontWeight: 500 }}>Reason: {visit.rejectionReason}</div>
                               )}
@@ -1363,7 +1455,220 @@ export default function Home() {
                               )}
                             </div>
 
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '8px' }}>
+                            {/* Action Buttons directly in card */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '10px', marginTop: '8px' }}>
+                              
+                              {visit.status === 'Pending' && (
+                                <>
+                                  <div style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                                    {language === 'en' ? (
+                                      <>Visit scheduled for <strong>{formatDate(visit.visitDate)}</strong>.</>
+                                    ) : (
+                                      <><strong>{formatDate(visit.visitDate)}</strong> के लिए मुलाकात निर्धारित है।</>
+                                    )}
+                                  </div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                    <button
+                                      className="btn btn-danger"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedVisit(visit);
+                                        setIsRejecting(true);
+                                      }}
+                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '8px' }}
+                                    >
+                                      ❌ {t.decline}
+                                    </button>
+                                    <button
+                                      className="btn btn-success"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedVisit(visit);
+                                        setIsApproving(true);
+                                      }}
+                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px' }}
+                                    >
+                                      ✅ {t.confirmClient}
+                                    </button>
+                                  </div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '4px' }}>
+                                    <button
+                                      className="btn btn-secondary"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedVisit(visit);
+                                        setIsSchedulingFollowUp(true);
+                                      }}
+                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', borderRadius: '8px' }}
+                                    >
+                                      ⏰ {language === 'en' ? 'Follow-Up' : 'फॉलो-अप'}
+                                    </button>
+                                    <button
+                                      className="btn btn-primary"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedVisit(visit);
+                                        setIsApproving(true);
+                                      }}
+                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', borderRadius: '8px' }}
+                                    >
+                                      ✏️ {language === 'en' ? 'Edit' : 'संपादित करें'}
+                                    </button>
+                                  </div>
+                                  {isAdminMode && (
+                                    <div style={{ marginTop: '4px' }}>
+                                      <button
+                                        className="btn btn-danger"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (window.confirm(language === 'en' ? 'Are you sure you want to delete this client?' : 'क्या आप वाकई इस ग्राहक को हटाना चाहते हैं?')) {
+                                            handleDeleteVisit(visit.id);
+                                          }
+                                        }}
+                                        style={{ height: '36px', fontSize: '12px', padding: '0 8px', width: '100%', backgroundColor: 'transparent', border: '1px solid var(--rejected)', color: 'var(--rejected)', borderRadius: '8px' }}
+                                      >
+                                        🗑️ {language === 'en' ? 'Delete' : 'हटाएं'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+
+                              {visit.status === 'FollowUp' && (
+                                <>
+                                  <div style={{ textAlign: 'center', fontSize: '13px', color: 'rgba(255,255,255,0.8)', marginBottom: '4px', fontWeight: 600 }}>
+                                    {language === 'en' ? 'Follow-Up Scheduled' : 'फॉलो-अप निर्धारित है'}
+                                  </div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                    <button
+                                      className="btn btn-danger"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedVisit(visit);
+                                        setIsRejecting(true);
+                                      }}
+                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '8px' }}
+                                    >
+                                      ❌ {t.decline}
+                                    </button>
+                                    <button
+                                      className="btn btn-success"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedVisit(visit);
+                                        setIsApproving(true);
+                                      }}
+                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px' }}
+                                    >
+                                      ✅ {t.confirmClient}
+                                    </button>
+                                  </div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '4px' }}>
+                                    <button
+                                      className="btn btn-secondary"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedVisit(visit);
+                                        setIsSchedulingFollowUp(true);
+                                      }}
+                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', borderRadius: '8px' }}
+                                    >
+                                      ⏰ {language === 'en' ? 'Reschedule' : 'रीशेड्यूल'}
+                                    </button>
+                                    <button
+                                      className="btn btn-primary"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedVisit(visit);
+                                        setIsApproving(true);
+                                      }}
+                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white' }}
+                                    >
+                                      ✏️ {language === 'en' ? 'Edit' : 'संपादित करें'}
+                                    </button>
+                                  </div>
+                                  {isAdminMode && (
+                                    <div style={{ marginTop: '4px' }}>
+                                      <button
+                                        className="btn btn-danger"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (window.confirm(language === 'en' ? 'Are you sure you want to delete this client?' : 'क्या आप वाकई इस ग्राहक को हटाना चाहते हैं?')) {
+                                            handleDeleteVisit(visit.id);
+                                          }
+                                        }}
+                                        style={{ height: '36px', fontSize: '12px', padding: '0 8px', width: '100%', backgroundColor: 'transparent', border: '1px solid rgba(255,100,100,0.6)', color: '#fca5a5', borderRadius: '8px' }}
+                                      >
+                                        🗑️ {language === 'en' ? 'Delete' : 'हटाएं'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+
+                              {visit.status === 'Rejected' && (
+                                <div style={{ display: 'grid', gridTemplateColumns: isAdminMode ? '1fr 1fr' : '1fr', gap: '8px' }}>
+                                  <button
+                                    className="btn btn-primary"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedVisit(visit);
+                                      setIsApproving(true);
+                                    }}
+                                    style={{ height: '36px', fontSize: '12px', padding: '0 8px', borderRadius: '8px' }}
+                                  >
+                                    ✏️ {language === 'en' ? 'Edit / Re-consider' : 'संपादित करें / फिर सोचें'}
+                                  </button>
+                                  {isAdminMode && (
+                                    <button
+                                      className="btn btn-danger"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (window.confirm(language === 'en' ? 'Are you sure you want to delete this client?' : 'क्या आप वाकई इस ग्राहक को हटाना चाहते हैं?')) {
+                                          handleDeleteVisit(visit.id);
+                                        }
+                                      }}
+                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '8px' }}
+                                    >
+                                      🗑️ {language === 'en' ? 'Delete' : 'हटाएं'}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+
+                              {visit.status === 'Approved' && (
+                                <div style={{ display: 'grid', gridTemplateColumns: isAdminMode ? '1fr 1fr' : '1fr', gap: '8px' }}>
+                                  <button
+                                    className="btn btn-primary"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedVisit(visit);
+                                      setIsApproving(true);
+                                    }}
+                                    style={{ height: '36px', fontSize: '12px', padding: '0 8px', borderRadius: '8px' }}
+                                  >
+                                    ✏️ {language === 'en' ? 'Edit' : 'संपादित करें'}
+                                  </button>
+                                  {isAdminMode && (
+                                    <button
+                                      className="btn btn-danger"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (window.confirm(language === 'en' ? 'Are you sure you want to delete this client?' : 'क्या आप वाकई इस ग्राहक को हटाना चाहते हैं?')) {
+                                          handleDeleteVisit(visit.id);
+                                        }
+                                      }}
+                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '8px' }}
+                                    >
+                                      🗑️ {language === 'en' ? 'Delete' : 'हटाएं'}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '8px', marginTop: '8px' }}>
                               {visit.createdByVendorName ? (
                                 <span style={{ backgroundColor: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>
                                   👤 Created by: {visit.createdByVendorName}
@@ -1371,14 +1676,6 @@ export default function Home() {
                               ) : (
                                 <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>👤 Created by: Admin</span>
                               )}
-
-                              <button
-                                className="btn btn-primary"
-                                style={{ width: 'auto', padding: '4px 10px', fontSize: '11px' }}
-                                onClick={() => setSelectedVisit(visit)}
-                              >
-                                View/Edit Full Form
-                              </button>
                             </div>
                           </div>
                         )}
@@ -1399,7 +1696,10 @@ export default function Home() {
                   onClick={() => setIsAddingVisit(true)}
                   aria-label="Add new client visit"
                 >
-                  <Plus size={28} />
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <span>Add</span>
+                    <span>New</span>
+                  </div>
                 </button>
               </div>
             </>
@@ -1411,8 +1711,19 @@ export default function Home() {
               <div className="search-container">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <button
-                    className="btn btn-secondary"
-                    style={{ width: 'auto', padding: '6px 12px', fontSize: '12px' }}
+                    className="btn btn-danger"
+                    style={{
+                      width: 'auto',
+                      padding: '8px 16px',
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      backgroundColor: '#ef4444',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '12px',
+                      boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)',
+                      cursor: 'pointer'
+                    }}
                     onClick={() => { setTab('dashboard'); setSearchQuery(''); setActiveCategory(null); }}
                   >
                     ← {t.back}
@@ -1440,131 +1751,210 @@ export default function Home() {
                 </div>
               ) : approvedList.length > 0 ? (
                 <div className="visit-card-list">
-                  {approvedList.map((visit) => (
-                    <div
-                      key={visit.id}
-                      className={`visit-card card-${visit.status.toLowerCase()}`}
-                      onClick={() => setSelectedVisit(visit)}
-                    >
-                      <div className="visit-card-header">
-                        <span className="visit-card-name">{visit.schoolName}</span>
-                        <span className="badge badge-approved">Approved ✅</span>
-                      </div>
-
-                      <div className="visit-card-details" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
-                        {visit.schoolDetails?.principalName && (
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                            <div>
-                              <span style={{ color: 'var(--text-secondary)' }}>Principal: </span>
-                              <strong style={{ color: 'var(--text-primary)' }}>{visit.schoolDetails.principalName}</strong>
+                  {approvedList.map((visit) => {
+                    const isExpanded = expandedCards.includes(visit.id);
+                    return (
+                      <div
+                        key={visit.id}
+                        className={`visit-card card-${visit.status.toLowerCase()}`}
+                        onClick={() => {
+                          if (isExpanded) {
+                            setExpandedCards(expandedCards.filter(id => id !== visit.id));
+                          } else {
+                            setExpandedCards([...expandedCards, visit.id]);
+                          }
+                        }}
+                      >
+                        <div className="visit-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span className="visit-card-name" style={{ fontWeight: 700, fontSize: '15px' }}>
+                              {visit.schoolName.length > 30 ? visit.schoolName.substring(0, 30) + '...' : visit.schoolName}
+                            </span>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '2px' }}>
+                              {visit.city && (
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                  📍 {visit.city}
+                                </span>
+                              )}
+                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                👤 {visit.createdByVendorName || (language === 'en' ? 'Admin' : 'एडमिन')}
+                              </span>
                             </div>
-                            {visit.schoolDetails?.principalMobile && (
-                              <a
-                                href={`tel:${visit.schoolDetails.principalMobile}`}
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '4px',
-                                  backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                                  color: 'var(--approved)',
-                                  padding: '5px 10px',
-                                  borderRadius: '8px',
-                                  fontSize: '12px',
-                                  fontWeight: 600,
-                                  textDecoration: 'none'
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Phone size={12} /> Call
-                              </a>
-                            )}
                           </div>
-                        )}
-
-                        {visit.idIncharge?.name && (
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '6px' }}>
-                            <div>
-                              <span style={{ color: 'var(--text-secondary)' }}>Incharge: </span>
-                              <strong style={{ color: 'var(--text-primary)' }}>{visit.idIncharge.name}</strong>
-                            </div>
-                            {visit.idIncharge?.mobile && (
-                              <a
-                                href={`tel:${visit.idIncharge.mobile}`}
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '4px',
-                                  backgroundColor: 'rgba(99, 102, 241, 0.15)',
-                                  color: 'var(--primary)',
-                                  padding: '5px 10px',
-                                  borderRadius: '8px',
-                                  fontSize: '12px',
-                                  fontWeight: 600,
-                                  textDecoration: 'none'
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Phone size={12} /> Call
-                              </a>
-                            )}
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <span className="badge badge-approved">Approved ✅</span>
+                            <span style={{ fontSize: '18px', transition: 'transform 0.2s', display: 'inline-block', transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
+                              ▼
+                            </span>
                           </div>
-                        )}
-
-                        {visit.reception?.name && (
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '6px' }}>
-                            <div>
-                              <span style={{ color: 'var(--text-secondary)' }}>Reception: </span>
-                              <strong style={{ color: 'var(--text-primary)' }}>{visit.reception.name}</strong>
-                            </div>
-                            {visit.reception?.mobile && (
-                              <a
-                                href={`tel:${visit.reception.mobile}`}
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '4px',
-                                  backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                                  color: '#60a5fa',
-                                  padding: '5px 10px',
-                                  borderRadius: '8px',
-                                  fontSize: '12px',
-                                  fontWeight: 600,
-                                  textDecoration: 'none'
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Phone size={12} /> Call
-                              </a>
-                            )}
-                          </div>
-                        )}
-
-                        <div style={{ display: 'flex', gap: '12px', fontSize: '12px', color: 'var(--text-secondary)', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '6px', flexWrap: 'wrap' }}>
-                          {visit.classes && (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                              <BookOpen size={12} style={{ color: 'var(--primary)' }} />
-                              Classes: {visit.classes.from}-{visit.classes.to}
-                            </span>
-                          )}
-                          {visit.sections && visit.sections.length > 0 && (
-                            <span>
-                              Sections: {visit.sections.join(', ')}
-                            </span>
-                          )}
-                          {visit.range && (
-                            <span>
-                              Range: {visit.range}
-                            </span>
-                          )}
-                          {visit.createdByVendorName && (
-                            <span style={{ backgroundColor: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>
-                              👤 {visit.createdByVendorName}
-                            </span>
-                          )}
                         </div>
+
+                        {isExpanded && (
+                          <div className="visit-card-details" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }} onClick={(e) => e.stopPropagation()}>
+                            {visit.schoolDetails?.principalName && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                                <div>
+                                  <span style={{ color: 'var(--text-secondary)' }}>Principal: </span>
+                                  <strong style={{ color: 'var(--text-primary)' }}>{visit.schoolDetails.principalName}</strong>
+                                  {visit.schoolDetails.principalMobile && (
+                                    <span style={{ color: 'var(--text-secondary)', marginLeft: '4px' }}>({visit.schoolDetails.principalMobile})</span>
+                                  )}
+                                </div>
+                                {visit.schoolDetails?.principalMobile && (
+                                  <a
+                                    href={`tel:${visit.schoolDetails.principalMobile}`}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                                      color: 'var(--approved)',
+                                      padding: '5px 10px',
+                                      borderRadius: '8px',
+                                      fontSize: '12px',
+                                      fontWeight: 600,
+                                      textDecoration: 'none'
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Phone size={12} /> Call
+                                  </a>
+                                )}
+                              </div>
+                            )}
+
+                            {visit.idIncharge?.name && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '6px' }}>
+                                <div>
+                                  <span style={{ color: 'var(--text-secondary)' }}>Incharge: </span>
+                                  <strong style={{ color: 'var(--text-primary)' }}>{visit.idIncharge.name}</strong>
+                                  {visit.idIncharge.mobile && (
+                                    <span style={{ color: 'var(--text-secondary)', marginLeft: '4px' }}>({visit.idIncharge.mobile})</span>
+                                  )}
+                                </div>
+                                {visit.idIncharge?.mobile && (
+                                  <a
+                                    href={`tel:${visit.idIncharge.mobile}`}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                                      color: 'var(--primary)',
+                                      padding: '5px 10px',
+                                      borderRadius: '8px',
+                                      fontSize: '12px',
+                                      fontWeight: 600,
+                                      textDecoration: 'none'
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Phone size={12} /> Call
+                                  </a>
+                                )}
+                              </div>
+                            )}
+
+                            {visit.reception?.name && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '6px' }}>
+                                <div>
+                                  <span style={{ color: 'var(--text-secondary)' }}>Reception: </span>
+                                  <strong style={{ color: 'var(--text-primary)' }}>{visit.reception.name}</strong>
+                                  {visit.reception.mobile && (
+                                    <span style={{ color: 'var(--text-secondary)', marginLeft: '4px' }}>({visit.reception.mobile})</span>
+                                  )}
+                                </div>
+                                {visit.reception?.mobile && (
+                                  <a
+                                    href={`tel:${visit.reception.mobile}`}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                                      color: '#60a5fa',
+                                      padding: '5px 10px',
+                                      borderRadius: '8px',
+                                      fontSize: '12px',
+                                      fontWeight: 600,
+                                      textDecoration: 'none'
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Phone size={12} /> Call
+                                  </a>
+                                )}
+                              </div>
+                            )}
+
+                            <div style={{ display: 'flex', gap: '12px', fontSize: '12px', color: 'var(--text-secondary)', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '6px', flexWrap: 'wrap' }}>
+                              {visit.classes && (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                  <BookOpen size={12} style={{ color: 'var(--primary)' }} />
+                                  Classes: {visit.classes.from}-{visit.classes.to}
+                                </span>
+                              )}
+                              {visit.cardTypes && visit.cardTypes.length > 0 && (
+                                <span>
+                                  🪪 Card Types: {visit.cardTypes.join(', ')}
+                                </span>
+                              )}
+                              {visit.sections && visit.sections.length > 0 && (
+                                <span>
+                                  Sections: {visit.sections.join(', ')}
+                                </span>
+                              )}
+                              {visit.houses && visit.houses.length > 0 && (
+                                <span>
+                                  Houses: {visit.houses.join(', ')}
+                                </span>
+                              )}
+                              {visit.range && (
+                                <span>
+                                  Total Strength: {visit.range}
+                                </span>
+                              )}
+                              {visit.createdByVendorName && (
+                                <span style={{ backgroundColor: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>
+                                  👤 {visit.createdByVendorName}
+                                </span>
+                              )}
+                            </div>
+                            {visit.notes && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>Notes: "{visit.notes}"</div>}
+                            {visit.additionalNotes && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>Additional Notes: "{visit.additionalNotes}"</div>}
+
+                            {/* Action Buttons directly in confirmed card */}
+                            <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '10px', marginTop: '8px' }}>
+                              <button
+                                className="btn btn-primary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedVisit(visit);
+                                  setIsApproving(true);
+                                }}
+                                style={{ height: '36px', fontSize: '12px', padding: '0 8px', flex: 1, borderRadius: '8px' }}
+                              >
+                                ✏️ {language === 'en' ? 'Edit' : 'संपादित करें'}
+                              </button>
+                              <button
+                                className="btn btn-danger"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (window.confirm(language === 'en' ? 'Are you sure you want to delete this client?' : 'क्या आप वाकई इस ग्राहक को हटाना चाहते हैं?')) {
+                                    handleDeleteVisit(visit.id);
+                                  }
+                                }}
+                                style={{ height: '36px', fontSize: '12px', padding: '0 8px', flex: 1, backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '8px' }}
+                              >
+                                🗑️ {language === 'en' ? 'Delete' : 'हटाएं'}
+                              </button>
+                            </div>
+
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div style={{ textAlign: 'center', padding: '60px 40px', color: 'var(--text-secondary)' }}>
@@ -1580,8 +1970,19 @@ export default function Home() {
               <div className="search-container">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <button
-                    className="btn btn-secondary"
-                    style={{ width: 'auto', padding: '6px 12px', fontSize: '12px' }}
+                    className="btn btn-danger"
+                    style={{
+                      width: 'auto',
+                      padding: '8px 16px',
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      backgroundColor: '#ef4444',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '12px',
+                      boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)',
+                      cursor: 'pointer'
+                    }}
                     onClick={() => { setTab('dashboard'); setActiveCategory(null); }}
                   >
                     ← {t.back}
@@ -1674,8 +2075,19 @@ export default function Home() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <button
-                    className="btn btn-secondary"
-                    style={{ width: 'auto', padding: '6px 12px', fontSize: '12px' }}
+                    className="btn btn-danger"
+                    style={{
+                      width: 'auto',
+                      padding: '8px 16px',
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      backgroundColor: '#ef4444',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '12px',
+                      boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)',
+                      cursor: 'pointer'
+                    }}
                     onClick={() => setTab('dashboard')}
                   >
                     ← {t.back}
@@ -2075,14 +2487,43 @@ export default function Home() {
           {isAddingVisit && (
             <div className="modal-overlay" onClick={() => setIsAddingVisit(false)}>
               <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                <h3 className="form-title">{t.addNewClientVisit} ({activeCategory ? (t[activeCategory.toLowerCase() as keyof typeof t] || activeCategory) : ''})</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                  <h3 className="form-title" style={{ margin: 0 }}>
+                    {t.addNewClientVisit} ({activeCategory ? (t[activeCategory.toLowerCase() as keyof typeof t] || activeCategory) : ''})
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingVisit(false)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'white',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '8px 16px',
+                      borderRadius: '12px',
+                      backgroundColor: '#ef4444',
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)'
+                    }}
+                    aria-label="Back"
+                  >
+                    ← {t.back}
+                  </button>
+                </div>
                 <form onSubmit={handleAddVisitSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
                   {/* Basic Visit info */}
                   <div className="section-card">
-                    <div className="section-card-title">{t.schoolDetails}</div>
                     <div className="form-group">
-                      <label className="form-label" htmlFor="new-school-name">{t.clientSchoolName}</label>
+                      <label className="form-label" htmlFor="new-school-name">
+                        {activeCategory
+                          ? `${t[activeCategory.toLowerCase() as keyof typeof t] || activeCategory} ${language === 'en' ? 'Name' : 'का नाम'}`
+                          : t.clientSchoolName}
+                      </label>
                       <input
                         id="new-school-name"
                         type="text"
@@ -2105,31 +2546,29 @@ export default function Home() {
                       />
                     </div>
 
-                    <div className="form-row">
-                      <div className="form-group" style={{ position: 'relative' }}>
-                        <label className="form-label" htmlFor="new-city">{t.city}</label>
-                        <input
-                          id="new-city"
-                          type="text"
-                          className="form-input"
-                          placeholder="Select City"
-                          readOnly
-                          value={newCity}
-                          onClick={() => setIsCityPickerOpen(true)}
-                          style={{ cursor: 'pointer' }}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label" htmlFor="new-date">{t.visitDate}</label>
-                        <input
-                          id="new-date"
-                          type="date"
-                          className="form-input"
-                          required
-                          value={newVisitDate}
-                          onChange={(e) => setNewVisitDate(e.target.value)}
-                        />
-                      </div>
+                    <div className="form-group" style={{ position: 'relative' }}>
+                      <label className="form-label" htmlFor="new-city">{t.city}</label>
+                      <input
+                        id="new-city"
+                        type="text"
+                        className="form-input"
+                        placeholder="Select City"
+                        readOnly
+                        value={newCity}
+                        onClick={() => setIsCityPickerOpen(true)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="new-date">{t.visitDate}</label>
+                      <input
+                        id="new-date"
+                        type="date"
+                        className="form-input"
+                        required
+                        value={newVisitDate}
+                        onChange={(e) => setNewVisitDate(e.target.value)}
+                      />
                     </div>
 
                     <div className="form-row">
@@ -2146,22 +2585,10 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="new-notes">{t.notes}</label>
-                      <textarea
-                        id="new-notes"
-                        className="form-input"
-                        style={{ minHeight: '60px', resize: 'vertical' }}
-                        placeholder="Initial notes..."
-                        value={newNotes}
-                        onChange={(e) => setNewNotes(e.target.value)}
-                      />
-                    </div>
                   </div>
 
                   {/* Principal Details */}
                   <div className="section-card">
-                    <div className="section-card-title">{language === 'en' ? 'Principal Details' : 'प्रिंसिपल का विवरण'}</div>
                     <div className="form-group">
                       <label className="form-label" htmlFor="new-principal-name">{t.principalName}</label>
                       <input
@@ -2201,7 +2628,6 @@ export default function Home() {
 
                   {/* Incharge Details */}
                   <div className="section-card">
-                    <div className="section-card-title">{t.idInchargeDetails}</div>
                     <div className="form-group">
                       <label className="form-label" htmlFor="new-incharge-name">{t.inchargeName}</label>
                       <input
@@ -2239,49 +2665,10 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Reception Details */}
-                  <div className="section-card">
-                    <div className="section-card-title">{t.receptionDetails}</div>
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="new-reception-name">{t.receptionName}</label>
-                      <input
-                        id="new-reception-name"
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. Priya Sharma"
-                        value={newReceptionName}
-                        onChange={(e) => setNewReceptionName(e.target.value)}
-                      />
-                    </div>
-                    <div className="form-row">
-                      <div className="form-group">
-                        <label className="form-label" htmlFor="new-reception-mobile">{t.receptionMobile}</label>
-                        <input
-                          id="new-reception-mobile"
-                          type="tel"
-                          className="form-input"
-                          placeholder="Reception mobile"
-                          value={newReceptionMobile}
-                          onChange={(e) => setNewReceptionMobile(e.target.value)}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label" htmlFor="new-reception-email">{t.receptionEmail}</label>
-                        <input
-                          id="new-reception-email"
-                          type="email"
-                          className="form-input"
-                          placeholder="Reception email"
-                          value={newReceptionEmail}
-                          onChange={(e) => setNewReceptionEmail(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Classes & Card Types */}
+
+                  {/* Classes */}
                   <div className="section-card">
-                    <div className="section-card-title">{t.classesCardTypes}</div>
                     <div className="form-row" style={{ marginBottom: '16px' }}>
                       <div className="form-group">
                         <label className="form-label" htmlFor="new-class-from">{t.fromClass}</label>
@@ -2310,34 +2697,10 @@ export default function Home() {
                         </select>
                       </div>
                     </div>
-
-                    <label className="form-label" style={{ marginBottom: '8px' }}>{t.cardTypeRequired}</label>
-                    <div className="checkbox-grid">
-                      {['Student', 'Staff', 'Bus', 'Other'].map((type) => {
-                        const isChecked = newCardTypes.includes(type);
-                        return (
-                          <label key={type} className="checkbox-label">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => {
-                                if (isChecked) {
-                                  setNewCardTypes(newCardTypes.filter((t) => t !== type));
-                                } else {
-                                  setNewCardTypes([...newCardTypes, type]);
-                                }
-                              }}
-                            />
-                            <span>{type === 'Student' ? t.student : type === 'Staff' ? t.staff : type === 'Bus' ? t.bus : type === 'Other' ? t.cardOther : type}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
                   </div>
 
                   {/* Dynamic Sections builder */}
                   <div className="section-card">
-                    <div className="section-card-title">{t.sections}</div>
 
                     {/* Yes/No switch for sections */}
                     <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', alignItems: 'center' }}>
@@ -2410,7 +2773,6 @@ export default function Home() {
 
                   {/* Dynamic Houses builder */}
                   <div className="section-card">
-                    <div className="section-card-title">{t.houses}</div>
 
                     {/* Yes/No switch for houses */}
                     <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', alignItems: 'center' }}>
@@ -2508,7 +2870,6 @@ export default function Home() {
 
                   {/* Additional notes */}
                   <div className="section-card">
-                    <div className="section-card-title">{t.additionalNotes}</div>
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <textarea
                         className="form-input"
@@ -2521,8 +2882,22 @@ export default function Home() {
                   </div>
 
                   <div className="form-row" style={{ marginTop: '24px', marginBottom: '24px' }}>
-                    <button type="button" className="btn btn-secondary" onClick={() => setIsAddingVisit(false)}>
-                      {t.cancel}
+                    <button
+                      type="button"
+                      className="btn btn-danger"
+                      style={{
+                        backgroundColor: '#ef4444',
+                        color: 'white',
+                        padding: '8px 16px',
+                        borderRadius: '12px',
+                        fontSize: '14px',
+                        fontWeight: 700,
+                        border: 'none',
+                        boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)'
+                      }}
+                      onClick={() => setIsAddingVisit(false)}
+                    >
+                      ← {t.back}
                     </button>
                     <button type="submit" className="btn btn-primary">
                       {t.addClientVisit}
@@ -2534,6 +2909,47 @@ export default function Home() {
           )}
 
         </>
+      )}
+
+      {/* Edit/Approval Bottom-Drawer Modal */}
+      {isApproving && selectedVisit && (
+        <div className="modal-overlay" onClick={() => { setIsApproving(false); }} style={{ zIndex: 10000 }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 className="form-title" style={{ margin: 0 }}>
+                {language === 'en' ? 'Edit / Confirm Client' : 'ग्राहक पुष्टि / संपादन'}
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setIsApproving(false)}
+                style={{ 
+                  background: 'none', 
+                  border: 'none', 
+                  color: 'white', 
+                  cursor: 'pointer', 
+                  display: 'inline-flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  padding: '8px 16px',
+                  borderRadius: '12px',
+                  backgroundColor: '#ef4444',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)'
+                }}
+                aria-label="Back"
+              >
+                ← {t.back}
+              </button>
+            </div>
+            <ApprovalForm
+              visit={selectedVisit}
+              onSave={handleApproveSave}
+              onCancel={() => setIsApproving(false)}
+              lang={language}
+            />
+          </div>
+        </div>
       )}
 
       {/* Follow-Up Scheduler drawer (outside condition so selectedVisit is not type-narrowed to null) */}

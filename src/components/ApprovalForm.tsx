@@ -114,9 +114,12 @@ export default function ApprovalForm({ visit, onSave, onCancel, lang = 'en' }: A
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div className="section-card">
-        <div className="section-card-title">{t.schoolDetails}</div>
         <div className="form-group">
-          <label className="form-label" htmlFor="school-name">{t.clientSchoolName}</label>
+          <label className="form-label" htmlFor="school-name">
+            {visit.category 
+              ? `${t[visit.category.toLowerCase() as keyof typeof t] || visit.category} ${lang === 'en' ? 'Name' : 'का नाम'}`
+              : t.clientSchoolName}
+          </label>
           <input
             id="school-name"
             type="text"
@@ -178,7 +181,6 @@ export default function ApprovalForm({ visit, onSave, onCancel, lang = 'en' }: A
       </div>
 
       <div className="section-card">
-        <div className="section-card-title">{t.idInchargeDetails}</div>
         <div className="form-group">
           <label className="form-label" htmlFor="incharge-name">{t.inchargeName}</label>
           <input
@@ -217,7 +219,6 @@ export default function ApprovalForm({ visit, onSave, onCancel, lang = 'en' }: A
       </div>
 
       <div className="section-card">
-        <div className="section-card-title">{t.receptionDetails}</div>
         <div className="form-group">
           <label className="form-label" htmlFor="reception-name">{t.receptionName}</label>
           <input
@@ -256,7 +257,6 @@ export default function ApprovalForm({ visit, onSave, onCancel, lang = 'en' }: A
       </div>
 
       <div className="section-card">
-        <div className="section-card-title">{t.classesCardTypes}</div>
         <div className="form-row" style={{ marginBottom: '16px' }}>
           <div className="form-group">
             <label className="form-label" htmlFor="class-from">{t.fromClass}</label>
@@ -304,7 +304,6 @@ export default function ApprovalForm({ visit, onSave, onCancel, lang = 'en' }: A
       </div>
 
       <div className="section-card">
-        <div className="section-card-title">{t.sections}</div>
         <div className="dynamic-list-builder">
           <div className="dynamic-tag-input-row">
             <input
@@ -345,7 +344,6 @@ export default function ApprovalForm({ visit, onSave, onCancel, lang = 'en' }: A
       </div>
 
       <div className="section-card">
-        <div className="section-card-title">{t.houses}</div>
         <div className="dynamic-list-builder">
           <div className="dynamic-tag-input-row">
             <input
@@ -386,7 +384,6 @@ export default function ApprovalForm({ visit, onSave, onCancel, lang = 'en' }: A
       </div>
 
       <div className="section-card">
-        <div className="section-card-title">{t.additionalNotes}</div>
         <div className="form-group" style={{ marginBottom: 0 }}>
           <textarea
             className="form-input"
@@ -399,37 +396,27 @@ export default function ApprovalForm({ visit, onSave, onCancel, lang = 'en' }: A
       </div>
 
       <div className="form-row" style={{ marginTop: '8px', marginBottom: '24px' }}>
-        <button type="button" className="btn btn-secondary" onClick={onCancel}>
-          {t.cancel}
+        <button 
+          type="button" 
+          className="btn btn-danger" 
+          style={{ 
+            backgroundColor: '#ef4444', 
+            color: 'white', 
+            padding: '8px 16px', 
+            borderRadius: '12px', 
+            fontSize: '14px', 
+            fontWeight: 700,
+            border: 'none',
+            boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)' 
+          }} 
+          onClick={onCancel}
+        >
+          ← {t.back}
         </button>
         <button type="submit" className="btn btn-success">
           <Save size={18} /> {t.saveConfirm}
         </button>
       </div>
     </form>
-  );
-}
-<div className="form-group">
-  <label className="form-label">{lang === 'en' ? 'Hive ID Pass' : 'हाइव आईडी पासवर्ड'}</label>
-  <input
-    type="text"
-    className="form-input"
-    value={hiveIdPass}
-    onChange={(e) => setHiveIdPass(e.target.value)}
-    placeholder="Enter Hive ID Password"
-  />
-</div>
-        </div >
-      </div >
-
-  <div className="form-row" style={{ marginTop: '8px', marginBottom: '24px' }}>
-    <button type="button" className="btn btn-secondary" onClick={onCancel}>
-      {t.cancel}
-    </button>
-    <button type="submit" className="btn btn-success">
-      <Save size={18} /> {t.saveConfirm}
-    </button>
-  </div>
-    </form >
   );
 }
