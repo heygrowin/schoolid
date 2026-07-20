@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Plus, Search, Calendar, MapPin, Phone, Mail, BookOpen,
   Layers, Palette, Clipboard, CheckCircle2, AlertCircle,
   ChevronLeft, Edit, Wifi, WifiOff, School, AlertTriangle, BarChart3
 } from 'lucide-react';
-import { dbService, SchoolVisit, Vendor } from '@/lib/db';
+import { dbService, SchoolVisit, Vendor, getSessionForDate } from '@/lib/db';
 import BottomNav from '@/components/BottomNav';
 import MetricCard from '@/components/MetricCard';
 import RejectionModal from '@/components/RejectionModal';
@@ -102,9 +102,57 @@ export default function Home() {
   // Search and Filter states
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'FollowUp' | 'Approved' | 'Rejected'>('All');
+  const [selectedUserFilter, setSelectedUserFilter] = useState<string>('All');
+  const [isUserFilterOpen, setIsUserFilterOpen] = useState<boolean>(false);
+
+  // Academic Session Management States
+  const currentAutomaticSession = useMemo(() => getSessionForDate(), []);
+  const [selectedSession, setSelectedSession] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('acl_selected_session');
+      if (saved) return saved;
+    }
+    return getSessionForDate();
+  });
+  const [isSessionDropdownOpen, setIsSessionDropdownOpen] = useState<boolean>(false);
+
+  const handleSelectSession = (sessionStr: string) => {
+    setSelectedSession(sessionStr);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('acl_selected_session', sessionStr);
+    }
+  };
 
   // Vendor / Salesman Management States
   const [vendors, setVendors] = useState<Vendor[]>([]);
+
+  // Compute available sessions list
+  const availableSessions = useMemo(() => {
+    const sessionSet = new Set<string>();
+    sessionSet.add(currentAutomaticSession);
+    visits.forEach(v => {
+      const s = v.session || getSessionForDate(v.visitDate);
+      if (s) sessionSet.add(s);
+    });
+    sessionSet.add('2026-2027');
+    return Array.from(sessionSet).sort().reverse();
+  }, [visits, currentAutomaticSession]);
+
+  // Compute available users/vendors list
+  const availableUsers = useMemo(() => {
+    const userSet = new Set<string>();
+    userSet.add('Admin');
+    userSet.add('All');
+    vendors.forEach(v => {
+      if (v.name) userSet.add(v.name);
+    });
+    visits.forEach(v => {
+      if (v.createdByVendorName && v.createdByVendorName !== 'Admin' && v.createdByVendorName !== 'एडमिन') {
+        userSet.add(v.createdByVendorName);
+      }
+    });
+    return Array.from(userSet);
+  }, [vendors, visits]);
   const [currentVendor, setCurrentVendor] = useState<Vendor | null>(null);
   const [isAdminMode, setIsAdminMode] = useState<boolean>(true); // default true for owner
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
@@ -146,10 +194,7 @@ export default function Home() {
         )
       );
 
-      setSelectedVisit((prev) =>
-        prev ? { ...prev, ...updates } : null
-      );
-
+      setSelectedVisit(null);
       setIsSchedulingFollowUp(false);
       setTimeout(() => setSyncStatus('synced'), 800);
     } catch (e) {
@@ -158,17 +203,48 @@ export default function Home() {
     }
   };
 
-  // Load visits
+  // Load visits and perform automatic session rollover if needed
   const loadVisits = async () => {
     try {
       const data = await dbService.getVisits();
       setVisits(data);
       setIsCloudConnected(dbService.isCloudConnected());
+
+      // Auto-rollover: check if current automatic session needs rollover from previous session
+      const currentSess = getSessionForDate();
+      const existingInCurrent = data.filter(v => (v.session || getSessionForDate(v.visitDate)) === currentSess);
+      if (existingInCurrent.length === 0 && data.length > 0) {
+        const previousSessions = Array.from(new Set(data.map(v => v.session || getSessionForDate(v.visitDate))))
+          .filter(s => s !== currentSess)
+          .sort()
+          .reverse();
+        if (previousSessions.length > 0) {
+          const prevSess = previousSessions[0];
+          const rolledVisits = await dbService.rolloverSession(prevSess, currentSess, data);
+          setVisits(rolledVisits);
+        }
+      }
     } catch (e) {
       console.error('Failed to load visits:', e);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAddNewSessionPrompt = async () => {
+    const input = window.prompt(
+      language === 'en'
+        ? 'Enter new Academic Session (e.g. 2027-2028):'
+        : 'नया शैक्षणिक सत्र दर्ज करें (उदा. 2027-2028):',
+      '2027-2028'
+    );
+    if (!input || !input.trim()) return;
+    const newSess = input.trim();
+    if (newSess === selectedSession) return;
+
+    const updated = await dbService.rolloverSession(selectedSession, newSess, visits);
+    setVisits(updated);
+    handleSelectSession(newSess);
   };
 
   // Load vendors list
@@ -267,6 +343,7 @@ export default function Home() {
       schoolName: newSchoolName.trim(),
       city: newCity.trim() || undefined,
       visitDate: newVisitDate,
+      session: selectedSession,
       notes: newNotes.trim() || undefined,
       range: newRange.trim() || undefined,
       status: newStatus,
@@ -463,10 +540,7 @@ export default function Home() {
       );
 
       // Update selected visit view
-      setSelectedVisit((prev) =>
-        prev ? { ...prev, status: 'Rejected', rejectionReason: reason } : null
-      );
-
+      setSelectedVisit(null);
       setIsRejecting(false);
       setTimeout(() => setSyncStatus('synced'), 800);
     } catch (e) {
@@ -492,10 +566,7 @@ export default function Home() {
       );
 
       // Update selected visit view
-      setSelectedVisit((prev) =>
-        prev ? { ...prev, ...updatedData } : null
-      );
-
+      setSelectedVisit(null);
       setIsApproving(false);
       setTimeout(() => setSyncStatus('synced'), 800);
     } catch (e) {
@@ -519,8 +590,12 @@ export default function Home() {
     }
   };
 
-  // Filter visits by vendor assigned cities if a vendor is logged in
+  // Filter visits by session and vendor assigned cities
   const visibleVisits = visits.filter((v) => {
+    // 0. Filter by selected Academic Session
+    const visitSession = v.session || getSessionForDate(v.visitDate);
+    if (visitSession !== selectedSession) return false;
+
     if (!isAdminMode && currentVendor) {
       // 1. If visit was created by this vendor, they can see it
       if (v.createdByVendorId === currentVendor.id) {
@@ -562,6 +637,17 @@ export default function Home() {
     // 0. Filter by active category if set
     if (activeCategory && v.category !== activeCategory) return false;
 
+    // 0.5 Filter by selected User/Vendor
+    if (selectedUserFilter !== 'All') {
+      if (selectedUserFilter === 'Admin') {
+        const isCreatedByAdmin = !v.createdByVendorName || v.createdByVendorName === 'Admin' || v.createdByVendorName === 'एडमिन';
+        if (!isCreatedByAdmin) return false;
+      } else {
+        const isMatchedVendor = v.createdByVendorName === selectedUserFilter || v.createdByVendorId === selectedUserFilter;
+        if (!isMatchedVendor) return false;
+      }
+    }
+
     // 1. Search Query filter (matches School Name, Principal, Status, City, Range, or Vendor)
     const query = searchQuery.toLowerCase().trim();
     const matchesSearch =
@@ -581,6 +667,15 @@ export default function Home() {
   const approvedList = visibleVisits.filter((v) => {
     if (v.status !== 'Approved') return false;
     if (activeCategory && v.category !== activeCategory) return false;
+    if (selectedUserFilter !== 'All') {
+      if (selectedUserFilter === 'Admin') {
+        const isCreatedByAdmin = !v.createdByVendorName || v.createdByVendorName === 'Admin' || v.createdByVendorName === 'एडमिन';
+        if (!isCreatedByAdmin) return false;
+      } else {
+        const isMatchedVendor = v.createdByVendorName === selectedUserFilter || v.createdByVendorId === selectedUserFilter;
+        if (!isMatchedVendor) return false;
+      }
+    }
     const query = searchQuery.toLowerCase().trim();
     return (
       v.schoolName.toLowerCase().includes(query) ||
@@ -597,13 +692,122 @@ export default function Home() {
       {/* App Header */}
       <header className="app-header">
         <div>
-          <span
-            className="app-title"
-            style={{ cursor: 'pointer' }}
-            onClick={() => { setTab('dashboard'); setSearchQuery(''); setSelectedVisit(null); }}
-          >
-            ACL ID Manage
-          </span>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+            <span
+              className="app-title"
+              style={{ cursor: 'pointer' }}
+              onClick={() => { setTab('dashboard'); setSearchQuery(''); setSelectedVisit(null); }}
+            >
+              ACL ID Manage
+            </span>
+
+            {/* Session Button Right to ACL ID Manage */}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setIsSessionDropdownOpen(!isSessionDropdownOpen)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '4px 10px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  backgroundColor: 'rgba(79, 70, 229, 0.15)',
+                  color: 'var(--primary)',
+                  border: '1px solid rgba(79, 70, 229, 0.3)',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                <span>📅 {selectedSession}</span>
+                <span style={{ fontSize: '9px' }}>▼</span>
+              </button>
+
+              {isSessionDropdownOpen && (
+                <>
+                  <div
+                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99 }}
+                    onClick={() => setIsSessionDropdownOpen(false)}
+                  />
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '110%',
+                      left: 0,
+                      zIndex: 100,
+                      backgroundColor: 'var(--bg-card)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '12px',
+                      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
+                      minWidth: '170px',
+                      padding: '6px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px'
+                    }}
+                  >
+                    <div style={{ padding: '4px 8px', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                      Academic Session
+                    </div>
+                    {availableSessions.map((sess) => (
+                      <button
+                        key={sess}
+                        onClick={() => {
+                          handleSelectSession(sess);
+                          setIsSessionDropdownOpen(false);
+                        }}
+                        style={{
+                          textAlign: 'left',
+                          padding: '8px 12px',
+                          fontSize: '12px',
+                          fontWeight: selectedSession === sess ? 700 : 500,
+                          backgroundColor: selectedSession === sess ? 'rgba(79, 70, 229, 0.1)' : 'transparent',
+                          color: selectedSession === sess ? 'var(--primary)' : 'var(--text-primary)',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          width: '100%'
+                        }}
+                      >
+                        <span>📅 {sess}</span>
+                        {sess === currentAutomaticSession && (
+                          <span style={{ fontSize: '9px', backgroundColor: '#d1fae5', color: '#047857', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
+                            Active
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                    <div style={{ borderTop: '1px solid var(--border-color)', marginTop: '4px', paddingTop: '4px' }}>
+                      <button
+                        onClick={() => {
+                          handleAddNewSessionPrompt();
+                          setIsSessionDropdownOpen(false);
+                        }}
+                        style={{
+                          textAlign: 'left',
+                          padding: '8px 12px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: 'var(--primary)',
+                          backgroundColor: 'transparent',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          width: '100%'
+                        }}
+                      >
+                        ➕ Add Future Session
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
           {!isAdminMode && currentVendor && (
             <span style={{ marginLeft: '8px', fontSize: '12px', padding: '2px 8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', color: 'var(--primary)' }}>
               👤 {currentVendor.name}
@@ -704,7 +908,7 @@ export default function Home() {
             <button
               className="btn btn-danger"
               style={{ width: 'auto', padding: '8px 12px', fontSize: '13px', backgroundColor: 'transparent', border: '1px solid var(--rejected)', color: 'var(--rejected)' }}
-              onClick={() => handleDeleteVisit(selectedVisit.id)}
+              onClick={() => { handleDeleteVisit(selectedVisit.id); setSelectedVisit(null); }}
             >
               {t.deleteEntry}
             </button>
@@ -774,7 +978,7 @@ export default function Home() {
                   </button>
                   <button
                     className="btn btn-success"
-                    onClick={() => handleApproveSave({ status: 'Approved' })}
+                    onClick={() => { handleApproveSave({ status: 'Approved' }); setSelectedVisit(null); }}
                     style={{ height: '56px', fontSize: '16px' }}
                   >
                     ✅ {t.confirm}
@@ -819,7 +1023,7 @@ export default function Home() {
               </div>
               <ApprovalForm
                 visit={selectedVisit}
-                onSave={handleApproveSave}
+                onSave={(data) => { handleApproveSave(data); setSelectedVisit(null); }}
                 onCancel={() => setIsApproving(false)}
                 lang={language}
               />
@@ -862,7 +1066,7 @@ export default function Home() {
                   </button>
                   <button
                     className="btn btn-success"
-                    onClick={() => handleApproveSave({ status: 'Approved' })}
+                    onClick={() => { handleApproveSave({ status: 'Approved' }); setSelectedVisit(null); }}
                     style={{ height: '48px', fontSize: '14px' }}
                   >
                     ✅ {t.confirmClient}
@@ -1124,6 +1328,7 @@ export default function Home() {
                     className="bubble-small"
                     onClick={() => {
                       setActiveCategory(null);
+                      setSelectedUserFilter('All');
                       setTab('visits');
                       setStatusFilter('All');
                       setSearchQuery('');
@@ -1137,6 +1342,7 @@ export default function Home() {
                     className="bubble-small"
                     onClick={() => {
                       setActiveCategory(null);
+                      setSelectedUserFilter('Admin');
                       setTab('visits');
                       setStatusFilter('Approved');
                     }}
@@ -1149,6 +1355,7 @@ export default function Home() {
                     className="bubble-small"
                     onClick={() => {
                       setActiveCategory(null);
+                      setSelectedUserFilter('Admin');
                       setTab('visits');
                       setStatusFilter('FollowUp');
                     }}
@@ -1161,6 +1368,7 @@ export default function Home() {
                     className="bubble-small"
                     onClick={() => {
                       setActiveCategory(null);
+                      setSelectedUserFilter('Admin');
                       setTab('visits');
                       setStatusFilter('Pending');
                     }}
@@ -1173,6 +1381,7 @@ export default function Home() {
                     className="bubble-small"
                     onClick={() => {
                       setActiveCategory(null);
+                      setSelectedUserFilter('Admin');
                       setTab('visits');
                       setStatusFilter('Rejected');
                     }}
@@ -1185,6 +1394,7 @@ export default function Home() {
                     className="bubble-small"
                     onClick={() => {
                       setActiveCategory(null);
+                      setSelectedUserFilter('Admin');
                       setTab('visits');
                       setStatusFilter('All');
                       const todayStr = new Date().toISOString().split('T')[0];
@@ -1214,6 +1424,7 @@ export default function Home() {
                       className="category-card"
                       onClick={() => {
                         setActiveCategory(cat.key as any);
+                        setSelectedUserFilter('Admin');
                         setTab('visits');
                         setStatusFilter('All');
                         setSearchQuery('');
@@ -1236,7 +1447,7 @@ export default function Home() {
             <>
               {/* Sticky Search bar */}
               <div className="search-container">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', gap: '8px', flexWrap: 'wrap' }}>
                   <button
                     className="btn btn-danger"
                     style={{
@@ -1255,9 +1466,86 @@ export default function Home() {
                   >
                     ← {t.back}
                   </button>
-                  <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: 'var(--text-primary)', textTransform: 'uppercase' }}>
-                    {activeCategory ? `${t[activeCategory.toLowerCase() as keyof typeof t] || activeCategory} - ${t.clientsList}` : t.clientsList}
-                  </h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {/* User/Vendor Filter Dropdown to the LEFT of School List */}
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        onClick={() => setIsUserFilterOpen(!isUserFilterOpen)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '6px 10px',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          backgroundColor: 'var(--primary)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '10px',
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)'
+                        }}
+                      >
+                        <span>👤 {selectedUserFilter === 'All' ? 'All Users' : selectedUserFilter}</span>
+                        <span style={{ fontSize: '9px' }}>▼</span>
+                      </button>
+
+                      {isUserFilterOpen && (
+                        <>
+                          <div
+                            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99 }}
+                            onClick={() => setIsUserFilterOpen(false)}
+                          />
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '110%',
+                              left: 0,
+                              zIndex: 100,
+                              backgroundColor: 'var(--bg-card)',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '12px',
+                              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
+                              minWidth: '140px',
+                              padding: '6px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '2px'
+                            }}
+                          >
+                            {availableUsers.map((userName) => (
+                              <button
+                                key={userName}
+                                onClick={() => {
+                                  setSelectedUserFilter(userName);
+                                  setIsUserFilterOpen(false);
+                                }}
+                                style={{
+                                  textAlign: 'left',
+                                  padding: '8px 12px',
+                                  fontSize: '12px',
+                                  fontWeight: selectedUserFilter === userName ? 700 : 500,
+                                  backgroundColor: selectedUserFilter === userName ? 'rgba(79, 70, 229, 0.1)' : 'transparent',
+                                  color: selectedUserFilter === userName ? 'var(--primary)' : 'var(--text-primary)',
+                                  border: 'none',
+                                  borderRadius: '8px',
+                                  cursor: 'pointer',
+                                  width: '100%'
+                                }}
+                              >
+                                👤 {userName === 'All' ? 'All Users' : userName}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* School List / Category List Header */}
+                    <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: 'var(--text-primary)', textTransform: 'uppercase' }}>
+                      {activeCategory ? `${t[activeCategory.toLowerCase() as keyof typeof t] || activeCategory} List` : 'School List'}
+                    </h3>
+                  </div>
                 </div>
                 <div className="search-input-wrapper">
                   <Search className="search-icon" size={18} />
@@ -1334,7 +1622,7 @@ export default function Home() {
                               </span>
                               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '2px' }}>
                                 {visit.city && (
-                                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                  <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-secondary)' }}>
                                     📍 {visit.city}
                                   </span>
                                 )}
@@ -1342,6 +1630,15 @@ export default function Home() {
                                   👤 {visit.createdByVendorName || (language === 'en' ? 'Admin' : 'एडमिन')}
                                 </span>
                               </div>
+                              {(() => {
+                                const noteContent = [visit.notes, visit.additionalNotes, visit.followUpNotes].filter(Boolean).join(' • ');
+                                return noteContent ? (
+                                  <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)', marginTop: '4px', fontStyle: 'italic', display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+                                    <span>📝</span>
+                                    <span>"{noteContent}"</span>
+                                  </div>
+                                ) : null;
+                              })()}
                             </div>
                           </div>
                           <span className={`badge ${visit.status === 'Approved'
@@ -1426,10 +1723,9 @@ export default function Home() {
 
                             {/* City and date details */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: 'var(--text-secondary)', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '8px' }}>
-                              {visit.city && <div>📍 City: {visit.city}</div>}
+                              {visit.city && <div style={{ fontSize: '16px', fontWeight: 800 }}>📍 City: {visit.city}</div>}
                               <div>📅 Visit Date: {formatDate(visit.visitDate)}</div>
                               {visit.range && <div>📏 Total Strength: {visit.range}</div>}
-                              {visit.notes && <div style={{ fontStyle: 'italic', marginTop: '2px' }}>"{visit.notes}"</div>}
                               
                               {visit.classes && (
                                 <div>🏫 Classes: {visit.classes.from} to {visit.classes.to}</div>
@@ -1442,9 +1738,6 @@ export default function Home() {
                               )}
                               {visit.houses && visit.houses.length > 0 && (
                                 <div>🏠 Houses: {visit.houses.join(', ')}</div>
-                              )}
-                              {visit.additionalNotes && (
-                                <div style={{ fontStyle: 'italic', marginTop: '2px' }}>📝 Additional Notes: "{visit.additionalNotes}"</div>
                               )}
 
                               {visit.status === 'Rejected' && visit.rejectionReason && (
@@ -1460,7 +1753,7 @@ export default function Home() {
                               
                               {visit.status === 'Pending' && (
                                 <>
-                                  <div style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                                  <div style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-primary)', marginBottom: '6px', fontWeight: 600 }}>
                                     {language === 'en' ? (
                                       <>Visit scheduled for <strong>{formatDate(visit.visitDate)}</strong>.</>
                                     ) : (
@@ -1469,63 +1762,58 @@ export default function Home() {
                                   </div>
                                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                                     <button
-                                      className="btn btn-danger"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setSelectedVisit(visit);
                                         setIsRejecting(true);
                                       }}
-                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '8px' }}
+                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#dc2626', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
                                     >
                                       ❌ {t.decline}
                                     </button>
                                     <button
-                                      className="btn btn-success"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setSelectedVisit(visit);
                                         setIsApproving(true);
                                       }}
-                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px' }}
+                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#16a34a', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
                                     >
                                       ✅ {t.confirmClient}
                                     </button>
                                   </div>
-                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '4px' }}>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '6px' }}>
                                     <button
-                                      className="btn btn-secondary"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setSelectedVisit(visit);
                                         setIsSchedulingFollowUp(true);
                                       }}
-                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', borderRadius: '8px' }}
+                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
                                     >
                                       ⏰ {language === 'en' ? 'Follow-Up' : 'फॉलो-अप'}
                                     </button>
                                     <button
-                                      className="btn btn-primary"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setSelectedVisit(visit);
                                         setIsApproving(true);
                                       }}
-                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', borderRadius: '8px' }}
+                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
                                     >
                                       ✏️ {language === 'en' ? 'Edit' : 'संपादित करें'}
                                     </button>
                                   </div>
                                   {isAdminMode && (
-                                    <div style={{ marginTop: '4px' }}>
+                                    <div style={{ marginTop: '6px' }}>
                                       <button
-                                        className="btn btn-danger"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           if (window.confirm(language === 'en' ? 'Are you sure you want to delete this client?' : 'क्या आप वाकई इस ग्राहक को हटाना चाहते हैं?')) {
                                             handleDeleteVisit(visit.id);
                                           }
                                         }}
-                                        style={{ height: '36px', fontSize: '12px', padding: '0 8px', width: '100%', backgroundColor: 'transparent', border: '1px solid var(--rejected)', color: 'var(--rejected)', borderRadius: '8px' }}
+                                        style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', width: '100%', backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', borderRadius: '8px', cursor: 'pointer' }}
                                       >
                                         🗑️ {language === 'en' ? 'Delete' : 'हटाएं'}
                                       </button>
@@ -1536,68 +1824,63 @@ export default function Home() {
 
                               {visit.status === 'FollowUp' && (
                                 <>
-                                  <div style={{ textAlign: 'center', fontSize: '13px', color: 'rgba(255,255,255,0.8)', marginBottom: '4px', fontWeight: 600 }}>
+                                  <div style={{ textAlign: 'center', fontSize: '13px', color: '#1e40af', marginBottom: '6px', fontWeight: 700 }}>
                                     {language === 'en' ? 'Follow-Up Scheduled' : 'फॉलो-अप निर्धारित है'}
                                   </div>
                                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                                     <button
-                                      className="btn btn-danger"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setSelectedVisit(visit);
                                         setIsRejecting(true);
                                       }}
-                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '8px' }}
+                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#dc2626', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
                                     >
                                       ❌ {t.decline}
                                     </button>
                                     <button
-                                      className="btn btn-success"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setSelectedVisit(visit);
                                         setIsApproving(true);
                                       }}
-                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px' }}
+                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#16a34a', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
                                     >
                                       ✅ {t.confirmClient}
                                     </button>
                                   </div>
-                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '4px' }}>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '6px' }}>
                                     <button
-                                      className="btn btn-secondary"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setSelectedVisit(visit);
                                         setIsSchedulingFollowUp(true);
                                       }}
-                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', borderRadius: '8px' }}
+                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
                                     >
                                       ⏰ {language === 'en' ? 'Reschedule' : 'रीशेड्यूल'}
                                     </button>
                                     <button
-                                      className="btn btn-primary"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setSelectedVisit(visit);
                                         setIsApproving(true);
                                       }}
-                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white' }}
+                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
                                     >
                                       ✏️ {language === 'en' ? 'Edit' : 'संपादित करें'}
                                     </button>
                                   </div>
                                   {isAdminMode && (
-                                    <div style={{ marginTop: '4px' }}>
+                                    <div style={{ marginTop: '6px' }}>
                                       <button
-                                        className="btn btn-danger"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           if (window.confirm(language === 'en' ? 'Are you sure you want to delete this client?' : 'क्या आप वाकई इस ग्राहक को हटाना चाहते हैं?')) {
                                             handleDeleteVisit(visit.id);
                                           }
                                         }}
-                                        style={{ height: '36px', fontSize: '12px', padding: '0 8px', width: '100%', backgroundColor: 'transparent', border: '1px solid rgba(255,100,100,0.6)', color: '#fca5a5', borderRadius: '8px' }}
+                                        style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', width: '100%', backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', borderRadius: '8px', cursor: 'pointer' }}
                                       >
                                         🗑️ {language === 'en' ? 'Delete' : 'हटाएं'}
                                       </button>
@@ -1609,26 +1892,24 @@ export default function Home() {
                               {visit.status === 'Rejected' && (
                                 <div style={{ display: 'grid', gridTemplateColumns: isAdminMode ? '1fr 1fr' : '1fr', gap: '8px' }}>
                                   <button
-                                    className="btn btn-primary"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setSelectedVisit(visit);
                                       setIsApproving(true);
                                     }}
-                                    style={{ height: '36px', fontSize: '12px', padding: '0 8px', borderRadius: '8px' }}
+                                    style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
                                   >
                                     ✏️ {language === 'en' ? 'Edit / Re-consider' : 'संपादित करें / फिर सोचें'}
                                   </button>
                                   {isAdminMode && (
                                     <button
-                                      className="btn btn-danger"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         if (window.confirm(language === 'en' ? 'Are you sure you want to delete this client?' : 'क्या आप वाकई इस ग्राहक को हटाना चाहते हैं?')) {
                                           handleDeleteVisit(visit.id);
                                         }
                                       }}
-                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '8px' }}
+                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', borderRadius: '8px', cursor: 'pointer' }}
                                     >
                                       🗑️ {language === 'en' ? 'Delete' : 'हटाएं'}
                                     </button>
@@ -1639,26 +1920,24 @@ export default function Home() {
                               {visit.status === 'Approved' && (
                                 <div style={{ display: 'grid', gridTemplateColumns: isAdminMode ? '1fr 1fr' : '1fr', gap: '8px' }}>
                                   <button
-                                    className="btn btn-primary"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setSelectedVisit(visit);
                                       setIsApproving(true);
                                     }}
-                                    style={{ height: '36px', fontSize: '12px', padding: '0 8px', borderRadius: '8px' }}
+                                    style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
                                   >
                                     ✏️ {language === 'en' ? 'Edit' : 'संपादित करें'}
                                   </button>
                                   {isAdminMode && (
                                     <button
-                                      className="btn btn-danger"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         if (window.confirm(language === 'en' ? 'Are you sure you want to delete this client?' : 'क्या आप वाकई इस ग्राहक को हटाना चाहते हैं?')) {
                                           handleDeleteVisit(visit.id);
                                         }
                                       }}
-                                      style={{ height: '36px', fontSize: '12px', padding: '0 8px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '8px' }}
+                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', borderRadius: '8px', cursor: 'pointer' }}
                                     >
                                       🗑️ {language === 'en' ? 'Delete' : 'हटाएं'}
                                     </button>
@@ -1772,7 +2051,7 @@ export default function Home() {
                             </span>
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '2px' }}>
                               {visit.city && (
-                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-secondary)' }}>
                                   📍 {visit.city}
                                 </span>
                               )}
@@ -1780,6 +2059,15 @@ export default function Home() {
                                 👤 {visit.createdByVendorName || (language === 'en' ? 'Admin' : 'एडमिन')}
                               </span>
                             </div>
+                            {(() => {
+                              const noteContent = [visit.notes, visit.additionalNotes, visit.followUpNotes].filter(Boolean).join(' • ');
+                              return noteContent ? (
+                                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)', marginTop: '4px', fontStyle: 'italic', display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+                                  <span>📝</span>
+                                  <span>"{noteContent}"</span>
+                                </div>
+                              ) : null;
+                            })()}
                           </div>
                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                             <span className="badge badge-approved">Approved ✅</span>
@@ -1920,8 +2208,6 @@ export default function Home() {
                                 </span>
                               )}
                             </div>
-                            {visit.notes && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>Notes: "{visit.notes}"</div>}
-                            {visit.additionalNotes && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>Additional Notes: "{visit.additionalNotes}"</div>}
 
                             {/* Action Buttons directly in confirmed card */}
                             <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '10px', marginTop: '8px' }}>
@@ -1932,19 +2218,18 @@ export default function Home() {
                                   setSelectedVisit(visit);
                                   setIsApproving(true);
                                 }}
-                                style={{ height: '36px', fontSize: '12px', padding: '0 8px', flex: 1, borderRadius: '8px' }}
+                                style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', flex: 1, backgroundColor: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
                               >
                                 ✏️ {language === 'en' ? 'Edit' : 'संपादित करें'}
                               </button>
                               <button
-                                className="btn btn-danger"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (window.confirm(language === 'en' ? 'Are you sure you want to delete this client?' : 'क्या आप वाकई इस ग्राहक को हटाना चाहते हैं?')) {
                                     handleDeleteVisit(visit.id);
                                   }
                                 }}
-                                style={{ height: '36px', fontSize: '12px', padding: '0 8px', flex: 1, backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '8px' }}
+                                style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', flex: 1, backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', borderRadius: '8px', cursor: 'pointer' }}
                               >
                                 🗑️ {language === 'en' ? 'Delete' : 'हटाएं'}
                               </button>
@@ -2913,7 +3198,7 @@ export default function Home() {
 
       {/* Edit/Approval Bottom-Drawer Modal */}
       {isApproving && selectedVisit && (
-        <div className="modal-overlay" onClick={() => { setIsApproving(false); }} style={{ zIndex: 10000 }}>
+        <div className="modal-overlay" onClick={() => { setIsApproving(false); setSelectedVisit(null); }} style={{ zIndex: 10000 }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3 className="form-title" style={{ margin: 0 }}>
@@ -2921,7 +3206,7 @@ export default function Home() {
               </h3>
               <button 
                 type="button" 
-                onClick={() => setIsApproving(false)}
+                onClick={() => { setIsApproving(false); setSelectedVisit(null); }}
                 style={{ 
                   background: 'none', 
                   border: 'none', 
@@ -2945,17 +3230,25 @@ export default function Home() {
             <ApprovalForm
               visit={selectedVisit}
               onSave={handleApproveSave}
-              onCancel={() => setIsApproving(false)}
+              onCancel={() => { setIsApproving(false); setSelectedVisit(null); }}
               lang={language}
             />
           </div>
         </div>
       )}
 
-      {/* Follow-Up Scheduler drawer (outside condition so selectedVisit is not type-narrowed to null) */}
+      {/* Rejection / Decline capturing modal */}
+      <RejectionModal
+        isOpen={isRejecting}
+        onClose={() => { setIsRejecting(false); setSelectedVisit(null); }}
+        onSave={handleRejectSave}
+        lang={language}
+      />
+
+      {/* Follow-Up Scheduler drawer */}
       <FollowUpModal
         isOpen={isSchedulingFollowUp}
-        onClose={() => setIsSchedulingFollowUp(false)}
+        onClose={() => { setIsSchedulingFollowUp(false); setSelectedVisit(null); }}
         onSave={handleFollowUpSave}
         initialDate={selectedVisit?.followUpDate}
         initialAction={selectedVisit?.followUpAction}

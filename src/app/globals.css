@@ -16,8 +16,8 @@
   --approved-bg: #d1fae5;
   --rejected: #b91c1c;
   --rejected-bg: #fee2e2;
-  --followup: #ffffff;
-  --followup-bg: #2563eb;
+  --followup: #1d4ed8;
+  --followup-bg: #dbeafe;
   --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
 }
 
@@ -902,21 +902,17 @@ body {
   background-color: #fecaca !important;
 }
 
-.visit-card.card-followup {
-  background-color: #2563eb !important;
-  border-color: rgba(147, 197, 253, 0.5) !important;
-  color: #ffffff !important;
+.visit-card.card-followup,
+.visit-card.card-follow-up,
+.card-followup,
+.card-follow-up {
+  background-color: var(--followup-bg) !important;
+  border-color: rgba(37, 99, 235, 0.25) !important;
 }
 
-.visit-card.card-followup .visit-card-name {
-  color: #ffffff !important;
-}
-
-.visit-card.card-followup .visit-card-header span,
-.visit-card.card-followup .visit-card-header div {
-  color: rgba(255,255,255,0.8) !important;
-}
-
-.visit-card.card-followup:active {
-  background-color: #1d4ed8 !important;
+.visit-card.card-followup:active,
+.visit-card.card-follow-up:active,
+.card-followup:active,
+.card-follow-up:active {
+  background-color: #bfdbfe !important;
 }

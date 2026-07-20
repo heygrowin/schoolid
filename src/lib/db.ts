@@ -49,10 +49,35 @@ export interface SchoolVisit {
   sections?: string[];
   houses?: string[];
   additionalNotes?: string;
+  session?: string;
   createdAt: string;
   updatedAt: string;
   createdByVendorId?: string;
   createdByVendorName?: string;
+}
+
+/**
+ * Calculates academic session string (e.g. '2026-2027') for a given date or current date.
+ * Session runs from April 1 to March 31.
+ */
+export function getSessionForDate(dateStrOrObj?: string | Date): string {
+  if (!dateStrOrObj) {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1; // 1-12
+    const startYear = month >= 4 ? year : year - 1;
+    return `${startYear}-${startYear + 1}`;
+  }
+  try {
+    const d = new Date(dateStrOrObj);
+    if (isNaN(d.getTime())) return getSessionForDate();
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    const startYear = month >= 4 ? year : year - 1;
+    return `${startYear}-${startYear + 1}`;
+  } catch (e) {
+    return getSessionForDate();
+  }
 }
 
 // Helper to strip out all 'undefined' properties recursively before sending to Firestore
@@ -122,11 +147,11 @@ export const dbService = {
   },
 
   async getVisits(): Promise<SchoolVisit[]> {
+    let rawVisits: SchoolVisit[] = [];
     if (this.isCloudConnected() && db) {
       try {
         const q = query(collection(db, 'visits'), orderBy('createdAt', 'desc'));
         const querySnapshot = await getDocs(q);
-        const visits: SchoolVisit[] = [];
         querySnapshot.forEach((docSnap) => {
           const data = docSnap.data();
           const createdAt = data.createdAt instanceof Timestamp 
@@ -135,22 +160,77 @@ export const dbService = {
           const updatedAt = data.updatedAt instanceof Timestamp 
             ? data.updatedAt.toDate().toISOString() 
             : data.updatedAt || new Date().toISOString();
+          const session = data.session || getSessionForDate(data.visitDate);
             
-          visits.push({
+          rawVisits.push({
             id: docSnap.id,
             ...data,
+            session,
             createdAt,
             updatedAt,
           } as SchoolVisit);
         });
-        return visits;
       } catch (error) {
         console.error('Firestore read error, falling back to local storage:', error);
-        return getLocalVisits();
+        rawVisits = getLocalVisits();
       }
     } else {
-      return getLocalVisits().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      rawVisits = getLocalVisits().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     }
+
+    return rawVisits.map(v => ({
+      ...v,
+      session: v.session || getSessionForDate(v.visitDate)
+    }));
+  },
+
+  async rolloverSession(sourceSession: string, targetSession: string, existingVisits: SchoolVisit[]): Promise<SchoolVisit[]> {
+    const sourceVisits = existingVisits.filter(v => (v.session || getSessionForDate(v.visitDate)) === sourceSession);
+    const targetVisitsCount = existingVisits.filter(v => (v.session || getSessionForDate(v.visitDate)) === targetSession).length;
+
+    if (targetVisitsCount > 0 || sourceVisits.length === 0) {
+      return existingVisits;
+    }
+
+    const startYear = targetSession.split('-')[0] || '2027';
+    const rolloverDate = `${startYear}-04-01`;
+    const newRolledVisits: SchoolVisit[] = [];
+
+    for (const oldVisit of sourceVisits) {
+      const rolloverData: Omit<SchoolVisit, 'id' | 'createdAt' | 'updatedAt'> = {
+        schoolName: oldVisit.schoolName,
+        city: oldVisit.city,
+        category: oldVisit.category,
+        range: oldVisit.range,
+        schoolDetails: oldVisit.schoolDetails,
+        idIncharge: oldVisit.idIncharge,
+        reception: oldVisit.reception,
+        classes: oldVisit.classes,
+        cardTypes: oldVisit.cardTypes,
+        sections: oldVisit.sections,
+        houses: oldVisit.houses,
+        createdByVendorId: oldVisit.createdByVendorId,
+        createdByVendorName: oldVisit.createdByVendorName,
+        session: targetSession,
+        visitDate: rolloverDate,
+        status: 'Pending',
+        notes: undefined,
+        additionalNotes: undefined,
+        followUpNotes: undefined,
+        followUpDate: undefined,
+        followUpAction: undefined,
+        rejectionReason: undefined,
+      };
+
+      try {
+        const saved = await this.saveVisit(rolloverData);
+        newRolledVisits.push(saved);
+      } catch (e) {
+        console.error('Failed to create rollover visit:', e);
+      }
+    }
+
+    return [...existingVisits, ...newRolledVisits];
   },
 
   async saveVisit(visitData: Omit<SchoolVisit, 'id' | 'createdAt' | 'updatedAt'>): Promise<SchoolVisit> {
