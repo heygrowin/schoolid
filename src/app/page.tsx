@@ -1598,67 +1598,117 @@ export default function Home() {
                 <div className="visit-card-list">
                   {filteredVisits.map((visit) => {
                     const isExpanded = expandedCards.includes(visit.id);
+                    const toggleExpandCard = (id: string) => {
+                      setExpandedCards((prev) =>
+                        prev.includes(id) ? prev.filter((cId) => cId !== id) : [...prev, id]
+                      );
+                    };
+
                     return (
                       <div
                         key={visit.id}
                         className={`visit-card card-${visit.status.toLowerCase()}`}
-                        style={{ cursor: 'pointer', transition: 'all 0.2s ease', position: 'relative' }}
-                        onClick={() => {
-                          if (isExpanded) {
-                            setExpandedCards(expandedCards.filter(id => id !== visit.id));
-                          } else {
-                            setExpandedCards([...expandedCards, visit.id]);
-                          }
-                        }}
                       >
-                        <div className="visit-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                            <span style={{ fontSize: '18px', transition: 'transform 0.2s', display: 'inline-block', marginTop: '2px', transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
-                              ▼
-                            </span>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                              <span className="visit-card-name" style={{ fontWeight: 700, fontSize: '15px' }}>
-                                {visit.schoolName.length > 30 ? visit.schoolName.substring(0, 30) + '...' : visit.schoolName}
+                        <div
+                          className="visit-card-header"
+                          style={{ display: 'flex', flexDirection: 'column', gap: '8px', cursor: 'pointer' }}
+                          onClick={() => toggleExpandCard(visit.id)}
+                        >
+                          {/* Top Row: Down Arrow, Title & Status Badge */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{
+                                fontSize: '14px',
+                                color: '#38bdf8',
+                                transition: 'transform 0.2s',
+                                display: 'inline-block',
+                                transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                                padding: '4px',
+                                borderRadius: '4px',
+                                backgroundColor: 'rgba(56, 189, 248, 0.1)'
+                              }}>
+                                ▼
                               </span>
-                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '2px' }}>
-                                {visit.city && (
-                                  <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-secondary)' }}>
-                                    📍 {visit.city}
-                                  </span>
-                                )}
-                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                                  👤 {visit.createdByVendorName || (language === 'en' ? 'Admin' : 'एडमिन')}
-                                </span>
-                              </div>
-                              {(() => {
-                                const noteContent = [visit.notes, visit.additionalNotes, visit.followUpNotes].filter(Boolean).join(' • ');
-                                return noteContent ? (
-                                  <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)', marginTop: '4px', fontStyle: 'italic', display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
-                                    <span>📝</span>
-                                    <span>"{noteContent}"</span>
-                                  </div>
-                                ) : null;
-                              })()}
+                              <span className="visit-card-name" style={{ fontWeight: 800, fontSize: '16px', color: 'var(--text-primary)' }}>
+                                {visit.schoolName}
+                              </span>
                             </div>
-                          </div>
-                          <span className={`badge ${visit.status === 'Approved'
-                            ? 'badge-approved'
-                            : visit.status === 'Rejected'
-                              ? 'badge-rejected'
-                              : visit.status === 'FollowUp'
-                                ? 'badge-followup'
-                                : 'badge-pending'
-                            }`}>
-                            {visit.status === 'Approved'
-                              ? 'Approved ✅'
+                            <span className={`badge ${visit.status === 'Approved'
+                              ? 'badge-approved'
                               : visit.status === 'Rejected'
-                                ? 'Rejected ❌'
+                                ? 'badge-rejected'
                                 : visit.status === 'FollowUp'
-                                  ? 'Follow-Up 🔵'
-                                  : 'Pending 🟡'}
-                          </span>
-                        </div>
+                                  ? 'badge-followup'
+                                  : 'badge-pending'
+                              }`}>
+                              {visit.status === 'Approved'
+                                ? 'Approved ✅'
+                                : visit.status === 'Rejected'
+                                  ? 'Rejected ❌'
+                                  : visit.status === 'FollowUp'
+                                    ? 'Follow-Up 🔵'
+                                    : 'Pending 🟡'}
+                            </span>
+                          </div>
 
+                          {/* Info Badges Row: City Name & Total Strength */}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', fontSize: '13px' }}>
+                            {visit.city && (
+                              <span style={{ fontWeight: 800, color: '#1e40af', backgroundColor: 'rgba(30, 64, 175, 0.15)', padding: '3px 10px', borderRadius: '6px', border: '1px solid rgba(30, 64, 175, 0.25)' }}>
+                                📍 {visit.city}
+                              </span>
+                            )}
+                            <span style={{ fontWeight: 700, color: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.12)', padding: '2px 8px', borderRadius: '6px' }}>
+                              📏 Total Strength: {visit.range || 'N/A'}
+                            </span>
+                          </div>
+
+                          {/* Contact Person & Call Button Row */}
+                          {(() => {
+                            const mobile = visit.schoolDetails?.principalMobile || visit.idIncharge?.mobile || visit.reception?.mobile;
+                            const contactName = visit.schoolDetails?.principalName || visit.idIncharge?.name || visit.reception?.name;
+                            return (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.03)', padding: '6px 10px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                                <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 600 }}>
+                                  👤 {contactName || (language === 'en' ? 'Contact Person' : 'संपर्क व्यक्ति')}: <span style={{ color: 'var(--text-secondary)' }}>{mobile || 'N/A'}</span>
+                                </span>
+                                {mobile ? (
+                                  <a
+                                    href={`tel:${mobile}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '6px',
+                                      backgroundColor: '#10b981',
+                                      color: 'white',
+                                      padding: '4px 12px',
+                                      borderRadius: '8px',
+                                      fontSize: '12px',
+                                      fontWeight: 700,
+                                      textDecoration: 'none',
+                                      boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)'
+                                    }}
+                                  >
+                                    📞 {language === 'en' ? 'Call' : 'कॉल करें'}
+                                  </a>
+                                ) : (
+                                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No mobile</span>
+                                )}
+                              </div>
+                            );
+                          })()}
+
+                          {/* Additional Message (with no "Message:" label, just the string) */}
+                          {(() => {
+                            const noteContent = [visit.additionalNotes, visit.notes, visit.followUpNotes].filter(Boolean).join(' • ');
+                            return noteContent ? (
+                              <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', backgroundColor: 'rgba(255,255,255,0.02)', padding: '6px 10px', borderRadius: '6px', borderLeft: '3px solid var(--primary)' }}>
+                                📝 "{noteContent}"
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
                         {isExpanded && (
                           <div className="visit-card-details" style={{ marginTop: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }} onClick={(e) => e.stopPropagation()}>
                             {/* Contact Action call triggers */}
@@ -1723,9 +1773,9 @@ export default function Home() {
 
                             {/* City and date details */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: 'var(--text-secondary)', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '8px' }}>
-                              {visit.city && <div style={{ fontSize: '16px', fontWeight: 800 }}>📍 City: {visit.city}</div>}
+                              {visit.city && <div style={{ fontSize: '15px', fontWeight: 800, color: '#1e40af' }}>📍 City: {visit.city}</div>}
                               <div>📅 Visit Date: {formatDate(visit.visitDate)}</div>
-                              {visit.range && <div>📏 Total Strength: {visit.range}</div>}
+                              <div>📏 Total Strength: {visit.range || 'N/A'}</div>
                               
                               {visit.classes && (
                                 <div>🏫 Classes: {visit.classes.from} to {visit.classes.to}</div>
@@ -2197,11 +2247,9 @@ export default function Home() {
                                   Houses: {visit.houses.join(', ')}
                                 </span>
                               )}
-                              {visit.range && (
-                                <span>
-                                  Total Strength: {visit.range}
-                                </span>
-                              )}
+                              <span style={{ fontWeight: 700, color: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.12)', padding: '2px 8px', borderRadius: '6px' }}>
+                                📏 Total Strength: {visit.range || 'N/A'}
+                              </span>
                               {visit.createdByVendorName && (
                                 <span style={{ backgroundColor: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>
                                   👤 {visit.createdByVendorName}
@@ -2770,8 +2818,8 @@ export default function Home() {
 
           {/* Add Visit Bottom-Drawer Modal */}
           {isAddingVisit && (
-            <div className="modal-overlay" onClick={() => setIsAddingVisit(false)}>
-              <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-overlay" onClick={() => setIsAddingVisit(false)} style={{ zIndex: 10000 }}>
+              <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                   <h3 className="form-title" style={{ margin: 0 }}>
                     {t.addNewClientVisit} ({activeCategory ? (t[activeCategory.toLowerCase() as keyof typeof t] || activeCategory) : ''})
@@ -2799,396 +2847,60 @@ export default function Home() {
                     ← {t.back}
                   </button>
                 </div>
-                <form onSubmit={handleAddVisitSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <ApprovalForm
+                  visit={{
+                    id: '',
+                    schoolName: '',
+                    category: activeCategory || undefined,
+                    city: '',
+                    visitDate: new Date().toISOString().split('T')[0],
+                    status: 'Pending',
+                    range: '',
+                    classes: { from: 'I', to: 'XII' },
+                    sections: ['A', 'B', 'C', 'D'],
+                    houses: ['Red', 'Blue', 'Green', 'Yellow'],
+                    schoolDetails: { address: '', principalName: '', principalMobile: '', principalEmail: '' },
+                    idIncharge: { name: '', mobile: '', email: '' },
+                    additionalNotes: '',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                  }}
+                  onSave={async (formData) => {
+                    setSyncStatus('syncing');
+                    const visitData: Omit<SchoolVisit, 'id'> = {
+                      schoolName: formData.schoolName || '',
+                      category: activeCategory || undefined,
+                      city: formData.city || undefined,
+                      visitDate: formData.visitDate || new Date().toISOString().split('T')[0],
+                      session: getSessionForDate(formData.visitDate || new Date().toISOString().split('T')[0]),
+                      status: 'Pending',
+                      range: formData.range || undefined,
+                      schoolDetails: formData.schoolDetails || { address: '', principalName: '', principalMobile: '', principalEmail: '' },
+                      idIncharge: formData.idIncharge || { name: '', mobile: '', email: '' },
+                      classes: formData.classes || { from: 'I', to: 'XII' },
+                      sections: formData.sections || [],
+                      houses: formData.houses || [],
+                      additionalNotes: formData.additionalNotes || '',
+                      createdByVendorId: !isAdminMode && currentVendor ? currentVendor.id : undefined,
+                      createdByVendorName: !isAdminMode && currentVendor ? currentVendor.name : undefined,
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString()
+                    };
 
-                  {/* Basic Visit info */}
-                  <div className="section-card">
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="new-school-name">
-                        {activeCategory
-                          ? `${t[activeCategory.toLowerCase() as keyof typeof t] || activeCategory} ${language === 'en' ? 'Name' : 'का नाम'}`
-                          : t.clientSchoolName}
-                      </label>
-                      <input
-                        id="new-school-name"
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. ABC School"
-                        required
-                        value={newSchoolName}
-                        onChange={(e) => setNewSchoolName(e.target.value)}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="new-address">{t.address}</label>
-                      <input
-                        id="new-address"
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. Main Street Road"
-                        value={newAddress}
-                        onChange={(e) => setNewAddress(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="form-group" style={{ position: 'relative' }}>
-                      <label className="form-label" htmlFor="new-city">{t.city}</label>
-                      <input
-                        id="new-city"
-                        type="text"
-                        className="form-input"
-                        placeholder="Select City"
-                        readOnly
-                        value={newCity}
-                        onClick={() => setIsCityPickerOpen(true)}
-                        style={{ cursor: 'pointer' }}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="new-date">{t.visitDate}</label>
-                      <input
-                        id="new-date"
-                        type="date"
-                        className="form-input"
-                        required
-                        value={newVisitDate}
-                        onChange={(e) => setNewVisitDate(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="form-row">
-                      <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                        <label className="form-label" htmlFor="new-range">{t.range}</label>
-                        <input
-                          id="new-range"
-                          type="text"
-                          className="form-input"
-                          placeholder={t.rangePlaceholder}
-                          value={newRange}
-                          onChange={(e) => setNewRange(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                  </div>
-
-                  {/* Principal Details */}
-                  <div className="section-card">
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="new-principal-name">{t.principalName}</label>
-                      <input
-                        id="new-principal-name"
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. Ramesh Kumar"
-                        value={newPrincipalName}
-                        onChange={(e) => setNewPrincipalName(e.target.value)}
-                      />
-                    </div>
-                    <div className="form-row">
-                      <div className="form-group">
-                        <label className="form-label" htmlFor="new-principal-mobile">{t.principalMobile}</label>
-                        <input
-                          id="new-principal-mobile"
-                          type="tel"
-                          className="form-input"
-                          placeholder="Principal mobile"
-                          value={newPrincipalMobile}
-                          onChange={(e) => setNewPrincipalMobile(e.target.value)}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label" htmlFor="new-principal-email">{t.principalEmail}</label>
-                        <input
-                          id="new-principal-email"
-                          type="email"
-                          className="form-input"
-                          placeholder="Principal email"
-                          value={newPrincipalEmail}
-                          onChange={(e) => setNewPrincipalEmail(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Incharge Details */}
-                  <div className="section-card">
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="new-incharge-name">{t.inchargeName}</label>
-                      <input
-                        id="new-incharge-name"
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. Amit Sen"
-                        value={newInchargeName}
-                        onChange={(e) => setNewInchargeName(e.target.value)}
-                      />
-                    </div>
-                    <div className="form-row">
-                      <div className="form-group">
-                        <label className="form-label" htmlFor="new-incharge-mobile">{t.inchargeMobile}</label>
-                        <input
-                          id="new-incharge-mobile"
-                          type="tel"
-                          className="form-input"
-                          placeholder="Incharge mobile"
-                          value={newInchargeMobile}
-                          onChange={(e) => setNewInchargeMobile(e.target.value)}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label" htmlFor="new-incharge-email">{t.inchargeEmail}</label>
-                        <input
-                          id="new-incharge-email"
-                          type="email"
-                          className="form-input"
-                          placeholder="Incharge email"
-                          value={newInchargeEmail}
-                          onChange={(e) => setNewInchargeEmail(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-
-
-                  {/* Classes */}
-                  <div className="section-card">
-                    <div className="form-row" style={{ marginBottom: '16px' }}>
-                      <div className="form-group">
-                        <label className="form-label" htmlFor="new-class-from">{t.fromClass}</label>
-                        <select
-                          id="new-class-from"
-                          className="form-input"
-                          value={newClassFrom}
-                          onChange={(e) => setNewClassFrom(e.target.value)}
-                        >
-                          {['Nursery', 'LKG', 'UKG', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'].map((c) => (
-                            <option key={c} value={c}>{c}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label" htmlFor="new-class-to">{t.toClass}</label>
-                        <select
-                          id="new-class-to"
-                          className="form-input"
-                          value={newClassTo}
-                          onChange={(e) => setNewClassTo(e.target.value)}
-                        >
-                          {['Nursery', 'LKG', 'UKG', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'].map((c) => (
-                            <option key={c} value={c}>{c}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Dynamic Sections builder */}
-                  <div className="section-card">
-
-                    {/* Yes/No switch for sections */}
-                    <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', alignItems: 'center' }}>
-                      <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                        {language === 'en' ? 'Section Required?' : 'सेक्शन आवश्यक है?'}
-                      </span>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
-                          type="button"
-                          className="btn"
-                          style={{
-                            width: 'auto',
-                            padding: '6px 16px',
-                            fontSize: '13px',
-                            borderRadius: '12px',
-                            backgroundColor: hasSections ? 'var(--primary)' : 'rgba(255, 255, 255, 0.05)',
-                            color: hasSections ? 'white' : 'var(--text-secondary)',
-                            border: '1px solid var(--border-color)'
-                          }}
-                          onClick={() => setHasSections(true)}
-                        >
-                          {language === 'en' ? 'Yes' : 'हाँ'}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn"
-                          style={{
-                            width: 'auto',
-                            padding: '6px 16px',
-                            fontSize: '13px',
-                            borderRadius: '12px',
-                            backgroundColor: !hasSections ? 'var(--primary)' : 'rgba(255, 255, 255, 0.05)',
-                            color: !hasSections ? 'white' : 'var(--text-secondary)',
-                            border: '1px solid var(--border-color)'
-                          }}
-                          onClick={() => setHasSections(false)}
-                        >
-                          {language === 'en' ? 'No' : 'नहीं'}
-                        </button>
-                      </div>
-                    </div>
-
-                    {hasSections && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        {/* Alphabet checklist buttons */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-                          {['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((sec) => {
-                            const isChecked = newSections.includes(sec);
-                            return (
-                              <label key={sec} className="checkbox-label" style={{ padding: '8px', justifyContent: 'center' }}>
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={() => {
-                                    if (isChecked) {
-                                      setNewSections(newSections.filter(s => s !== sec));
-                                    } else {
-                                      setNewSections([...newSections, sec]);
-                                    }
-                                  }}
-                                />
-                                <span>{sec}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Dynamic Houses builder */}
-                  <div className="section-card">
-
-                    {/* Yes/No switch for houses */}
-                    <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', alignItems: 'center' }}>
-                      <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                        {language === 'en' ? 'House Required?' : 'हाउस आवश्यक है?'}
-                      </span>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
-                          type="button"
-                          className="btn"
-                          style={{
-                            width: 'auto',
-                            padding: '6px 16px',
-                            fontSize: '13px',
-                            borderRadius: '12px',
-                            backgroundColor: hasHouses ? 'var(--primary)' : 'rgba(255, 255, 255, 0.05)',
-                            color: hasHouses ? 'white' : 'var(--text-secondary)',
-                            border: '1px solid var(--border-color)'
-                          }}
-                          onClick={() => setHasHouses(true)}
-                        >
-                          {language === 'en' ? 'Yes' : 'हाँ'}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn"
-                          style={{
-                            width: 'auto',
-                            padding: '6px 16px',
-                            fontSize: '13px',
-                            borderRadius: '12px',
-                            backgroundColor: !hasHouses ? 'var(--primary)' : 'rgba(255, 255, 255, 0.05)',
-                            color: !hasHouses ? 'white' : 'var(--text-secondary)',
-                            border: '1px solid var(--border-color)'
-                          }}
-                          onClick={() => setHasHouses(false)}
-                        >
-                          {language === 'en' ? 'No' : 'नहीं'}
-                        </button>
-                      </div>
-                    </div>
-
-                    {hasHouses && (
-                      <div className="dynamic-list-builder">
-                        <div className="dynamic-tag-input-row">
-                          <input
-                            type="text"
-                            className="form-input"
-                            placeholder={t.addHousePlaceholder}
-                            value={newHouseInput}
-                            onChange={(e) => setNewHouseInput(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                const trimmed = newHouseInput.trim();
-                                if (trimmed && !newHouses.includes(trimmed)) {
-                                  setNewHouses([...newHouses, trimmed]);
-                                  setNewHouseInput('');
-                                }
-                              }
-                            }}
-                          />
-                          <button
-                            type="button"
-                            className="btn btn-primary"
-                            style={{ width: 'auto', padding: '12px 16px' }}
-                            onClick={() => {
-                              const trimmed = newHouseInput.trim();
-                              if (trimmed && !newHouses.includes(trimmed)) {
-                                setNewHouses([...newHouses, trimmed]);
-                                setNewHouseInput('');
-                              }
-                            }}
-                          >
-                            <Plus size={20} />
-                          </button>
-                        </div>
-                        <div className="dynamic-tag-list">
-                          {newHouses.map((house) => (
-                            <span key={house} className="dynamic-tag">
-                              {house}
-                              <button
-                                type="button"
-                                className="dynamic-tag-remove"
-                                onClick={() => setNewHouses(newHouses.filter((h) => h !== house))}
-                              >
-                                &times;
-                              </button>
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Additional notes */}
-                  <div className="section-card">
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <textarea
-                        className="form-input"
-                        style={{ minHeight: '100px', resize: 'vertical' }}
-                        placeholder={t.additionalNotesPlaceholder}
-                        value={newAdditionalNotes}
-                        onChange={(e) => setNewAdditionalNotes(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-row" style={{ marginTop: '24px', marginBottom: '24px' }}>
-                    <button
-                      type="button"
-                      className="btn btn-danger"
-                      style={{
-                        backgroundColor: '#ef4444',
-                        color: 'white',
-                        padding: '8px 16px',
-                        borderRadius: '12px',
-                        fontSize: '14px',
-                        fontWeight: 700,
-                        border: 'none',
-                        boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)'
-                      }}
-                      onClick={() => setIsAddingVisit(false)}
-                    >
-                      ← {t.back}
-                    </button>
-                    <button type="submit" className="btn btn-primary">
-                      {t.addClientVisit}
-                    </button>
-                  </div>
-                </form>
+                    try {
+                      const added = await dbService.saveVisit(visitData);
+                      setVisits((prev) => [added, ...prev]);
+                      setIsAddingVisit(false);
+                      setTab('visits');
+                      setTimeout(() => setSyncStatus('synced'), 800);
+                    } catch (e) {
+                      console.error('Error saving new visit:', e);
+                      setSyncStatus('synced');
+                    }
+                  }}
+                  onCancel={() => setIsAddingVisit(false)}
+                  lang={language}
+                />
               </div>
             </div>
           )}
