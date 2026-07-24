@@ -49,6 +49,10 @@ export interface SchoolVisit {
   sections?: string[];
   houses?: string[];
   additionalNotes?: string;
+  address?: string;
+  contactPersonName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
   session?: string;
   createdAt: string;
   updatedAt: string;
@@ -78,6 +82,19 @@ export function getSessionForDate(dateStrOrObj?: string | Date): string {
   } catch (e) {
     return getSessionForDate();
   }
+}
+
+export function getNextSession(sessionStr?: string): string {
+  const current = sessionStr || getSessionForDate();
+  if (current && current.includes('-')) {
+    const parts = current.split('-');
+    const y1 = parseInt(parts[0], 10);
+    const y2 = parseInt(parts[1], 10);
+    if (!isNaN(y1) && !isNaN(y2)) {
+      return `${y1 + 1}-${y2 + 1}`;
+    }
+  }
+  return '2027-2028';
 }
 
 // Helper to strip out all 'undefined' properties recursively before sending to Firestore
@@ -346,6 +363,41 @@ export const dbService = {
     const localVisits = getLocalVisits();
     const filtered = localVisits.filter(v => v.id !== id);
     saveLocalVisits(filtered);
+  },
+
+  async deleteSessionVisits(sessionToDelete: string): Promise<number> {
+    let count = 0;
+    if (this.isCloudConnected() && db) {
+      try {
+        const q = query(collection(db, 'visits'));
+        const querySnapshot = await getDocs(q);
+        const docsToDelete = querySnapshot.docs.filter((docSnap) => {
+          const data = docSnap.data();
+          const sess = data.session || getSessionForDate(data.visitDate);
+          return sess === sessionToDelete || sess === '2027-28' || sess === '2027-2028';
+        });
+
+        for (const docSnap of docsToDelete) {
+          await deleteDoc(doc(db, 'visits', docSnap.id));
+          count++;
+        }
+      } catch (error) {
+        console.error('Error deleting session visits from Firestore:', error);
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      const localVisits = getLocalVisits();
+      const filtered = localVisits.filter((v) => {
+        const sess = v.session || getSessionForDate(v.visitDate);
+        const match = sess === sessionToDelete || sess === '2027-28' || sess === '2027-2028';
+        if (match) count++;
+        return !match;
+      });
+      saveLocalVisits(filtered);
+    }
+
+    return count;
   },
 
   async getCities(): Promise<string[]> {

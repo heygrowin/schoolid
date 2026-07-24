@@ -100,7 +100,6 @@ export default function ApprovalForm({
               id="school-name"
               type="text"
               className="form-input"
-              required
               placeholder="e.g. ABC School"
               value={schoolName}
               onChange={(e) => setSchoolName(e.target.value)}
@@ -141,7 +140,6 @@ export default function ApprovalForm({
               id="edit-visit-date"
               type="date"
               className="form-input"
-              required
               value={visitDate}
               onChange={(e) => setVisitDate(e.target.value)}
             />
@@ -159,13 +157,10 @@ export default function ApprovalForm({
             />
           </div>
 
-          {/* Contact Person Section */}
+          {/* Contact Person Section - Separate Lines */}
           <div style={{ margin: '16px 0 12px 0', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px' }}>
-            <div style={{ fontWeight: 700, fontSize: '13px', color: '#38bdf8', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              👤 {t.contactPersonName || 'Contact Person Details'}
-            </div>
             <div className="form-group">
-              <label className="form-label" htmlFor="contact-name">{t.contactPersonName || 'Contact Person Name'}</label>
+              <label className="form-label" htmlFor="contact-name">{t.contactPersonName || 'Contact Person'}</label>
               <input
                 id="contact-name"
                 type="text"
@@ -175,63 +170,63 @@ export default function ApprovalForm({
                 onChange={(e) => setContactName(e.target.value)}
               />
             </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label" htmlFor="contact-mobile">{t.contactPhone || 'Contact Phone No'}</label>
-                <input
-                  id="contact-mobile"
-                  type="tel"
-                  className="form-input"
-                  placeholder="Contact mobile"
-                  value={contactMobile}
-                  onChange={(e) => setContactMobile(e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label" htmlFor="contact-email">{t.contactEmail || 'Contact Email (Optional)'}</label>
-                <input
-                  id="contact-email"
-                  type="email"
-                  className="form-input"
-                  placeholder="Contact email"
-                  value={contactEmail}
-                  onChange={(e) => setContactEmail(e.target.value)}
-                />
-              </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="contact-mobile">{t.contactPhone || 'Contact'}</label>
+              <input
+                id="contact-mobile"
+                type="tel"
+                className="form-input"
+                placeholder="Contact mobile"
+                value={contactMobile}
+                onChange={(e) => setContactMobile(e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="contact-email">{t.contactEmail || 'Contact Email'}</label>
+              <input
+                id="contact-email"
+                type="email"
+                className="form-input"
+                placeholder="Contact email"
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+              />
             </div>
           </div>
 
-          {/* Classes Section */}
-          <div style={{ margin: '16px 0 12px 0', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px' }}>
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label" htmlFor="class-from">{t.fromClass}</label>
-                <select
-                  id="class-from"
-                  className="form-input"
-                  value={classFrom}
-                  onChange={(e) => setClassFrom(e.target.value)}
-                >
-                  {CLASS_OPTIONS.map((c) => (
-                    <option key={c} value={c} style={{ backgroundColor: 'var(--bg-card)' }}>{c}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label" htmlFor="class-to">{t.toClass}</label>
-                <select
-                  id="class-to"
-                  className="form-input"
-                  value={classTo}
-                  onChange={(e) => setClassTo(e.target.value)}
-                >
-                  {CLASS_OPTIONS.map((c) => (
-                    <option key={c} value={c} style={{ backgroundColor: 'var(--bg-card)' }}>{c}</option>
-                  ))}
-                </select>
+          {/* Classes Section - Only for School category */}
+          {(!visit.category || visit.category === 'School') && (
+            <div style={{ margin: '16px 0 12px 0', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px' }}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label" htmlFor="class-from">{t.fromClass}</label>
+                  <select
+                    id="class-from"
+                    className="form-input"
+                    value={classFrom}
+                    onChange={(e) => setClassFrom(e.target.value)}
+                  >
+                    {CLASS_OPTIONS.map((c) => (
+                      <option key={c} value={c} style={{ backgroundColor: 'var(--bg-card)' }}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="class-to">{t.toClass}</label>
+                  <select
+                    id="class-to"
+                    className="form-input"
+                    value={classTo}
+                    onChange={(e) => setClassTo(e.target.value)}
+                  >
+                    {CLASS_OPTIONS.map((c) => (
+                      <option key={c} value={c} style={{ backgroundColor: 'var(--bg-card)' }}>{c}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Remarks */}
           <div style={{ margin: '16px 0 0 0', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px' }}>

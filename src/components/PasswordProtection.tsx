@@ -87,7 +87,7 @@ export default function PasswordProtection({ children }: { children: React.React
         border: '1px solid #1f2937'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#f9fafb', margin: '0 0 8px 0' }}>ACL ID Manage</h2>
+          <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#f9fafb', margin: '0 0 8px 0' }}>Market Manager</h2>
           <p style={{ fontSize: '14px', color: '#9ca3af', margin: 0 }}>Sign in to continue to your dashboard</p>
         </div>
 

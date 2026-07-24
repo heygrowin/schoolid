@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ACL ID Manage",
+  title: "Market Manager",
   description: "Manage client visits, schedules, and details on-the-go.",
   icons: {
     icon: [

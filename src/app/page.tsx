@@ -6,7 +6,7 @@ import {
   Layers, Palette, Clipboard, CheckCircle2, AlertCircle,
   ChevronLeft, Edit, Wifi, WifiOff, School, AlertTriangle, BarChart3
 } from 'lucide-react';
-import { dbService, SchoolVisit, Vendor, getSessionForDate } from '@/lib/db';
+import { dbService, SchoolVisit, Vendor, getSessionForDate, getNextSession } from '@/lib/db';
 import BottomNav from '@/components/BottomNav';
 import MetricCard from '@/components/MetricCard';
 import RejectionModal from '@/components/RejectionModal';
@@ -107,14 +107,26 @@ export default function Home() {
 
   // Academic Session Management States
   const currentAutomaticSession = useMemo(() => getSessionForDate(), []);
+    const [customSessions, setCustomSessions] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('acl_custom_sessions');
+      if (saved) {
+        try { return JSON.parse(saved); } catch (e) {}
+      }
+    }
+    return [];
+  });
+
   const [selectedSession, setSelectedSession] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('acl_selected_session');
-      if (saved) return saved;
+      if (saved && saved !== '2027-2028' && saved !== '2027-28') return saved;
     }
-    return getSessionForDate();
+    return '2026-2027';
   });
   const [isSessionDropdownOpen, setIsSessionDropdownOpen] = useState<boolean>(false);
+  const [transferModalVisit, setTransferModalVisit] = useState<SchoolVisit | null>(null);
+  
 
   const handleSelectSession = (sessionStr: string) => {
     setSelectedSession(sessionStr);
@@ -129,14 +141,14 @@ export default function Home() {
   // Compute available sessions list
   const availableSessions = useMemo(() => {
     const sessionSet = new Set<string>();
-    sessionSet.add(currentAutomaticSession);
+    sessionSet.add('2026-2027');
+    customSessions.forEach(s => sessionSet.add(s));
     visits.forEach(v => {
       const s = v.session || getSessionForDate(v.visitDate);
       if (s) sessionSet.add(s);
     });
-    sessionSet.add('2026-2027');
     return Array.from(sessionSet).sort().reverse();
-  }, [visits, currentAutomaticSession]);
+  }, [visits, customSessions]);
 
   // Compute available users/vendors list
   const availableUsers = useMemo(() => {
@@ -203,27 +215,12 @@ export default function Home() {
     }
   };
 
-  // Load visits and perform automatic session rollover if needed
+  // Load visits
   const loadVisits = async () => {
     try {
       const data = await dbService.getVisits();
       setVisits(data);
       setIsCloudConnected(dbService.isCloudConnected());
-
-      // Auto-rollover: check if current automatic session needs rollover from previous session
-      const currentSess = getSessionForDate();
-      const existingInCurrent = data.filter(v => (v.session || getSessionForDate(v.visitDate)) === currentSess);
-      if (existingInCurrent.length === 0 && data.length > 0) {
-        const previousSessions = Array.from(new Set(data.map(v => v.session || getSessionForDate(v.visitDate))))
-          .filter(s => s !== currentSess)
-          .sort()
-          .reverse();
-        if (previousSessions.length > 0) {
-          const prevSess = previousSessions[0];
-          const rolledVisits = await dbService.rolloverSession(prevSess, currentSess, data);
-          setVisits(rolledVisits);
-        }
-      }
     } catch (e) {
       console.error('Failed to load visits:', e);
     } finally {
@@ -240,11 +237,17 @@ export default function Home() {
     );
     if (!input || !input.trim()) return;
     const newSess = input.trim();
-    if (newSess === selectedSession) return;
 
-    const updated = await dbService.rolloverSession(selectedSession, newSess, visits);
-    setVisits(updated);
+    if (!customSessions.includes(newSess)) {
+      const updated = [...customSessions, newSess];
+      setCustomSessions(updated);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('acl_custom_sessions', JSON.stringify(updated));
+      }
+    }
+
     handleSelectSession(newSess);
+    setIsSessionDropdownOpen(false);
   };
 
   // Load vendors list
@@ -550,6 +553,190 @@ export default function Home() {
   };
 
   // Approve and form fill save handler
+    const handleDirectConfirm = async (visit: SchoolVisit) => {
+    const confirmMsg = language === 'en'
+      ? `Are you sure you want to confirm client "${visit.schoolName}"?`
+      : `क्या आप वाकई ग्राहक "${visit.schoolName}" की पुष्टि करना चाहते हैं?`;
+    if (window.confirm(confirmMsg)) {
+      setSyncStatus('syncing');
+      try {
+        await dbService.updateVisit(visit.id, { status: 'Approved' });
+        setVisits((prev) =>
+          prev.map((v) => (v.id === visit.id ? { ...v, status: 'Approved', updatedAt: new Date().toISOString() } : v))
+        );
+        setTimeout(() => setSyncStatus('synced'), 800);
+      } catch (e) {
+        console.error('Error confirming visit:', e);
+        setSyncStatus('synced');
+      }
+    }
+  };
+
+  const handleMoveToPending = async (visit: SchoolVisit) => {
+    const confirmMsg = language === 'en'
+      ? `Are you sure you want to move client "${visit.schoolName}" back to Pending?`
+      : `क्या आप वाकई ग्राहक "${visit.schoolName}" को वापस लंबित (Pending) में बदलना चाहते हैं?`;
+    if (window.confirm(confirmMsg)) {
+      setSyncStatus('syncing');
+      try {
+        await dbService.updateVisit(visit.id, { status: 'Pending' });
+        setVisits((prev) =>
+          prev.map((v) => (v.id === visit.id ? { ...v, status: 'Pending', updatedAt: new Date().toISOString() } : v))
+        );
+        setTimeout(() => setSyncStatus('synced'), 800);
+      } catch (e) {
+        console.error('Error moving visit to pending:', e);
+        setSyncStatus('synced');
+      }
+    }
+  };
+
+      const handleDeleteSession = async (sessionToDelete: string) => {
+    const confirmMsg = language === 'en'
+      ? `Are you sure you want to delete session "${sessionToDelete}" and ALL client records in this session?`
+      : `क्या आप वाकई सत्र "${sessionToDelete}" और इस सत्र के सभी ग्राहक रिकॉर्ड हटाना चाहते हैं?`;
+
+    if (window.confirm(confirmMsg)) {
+      setSyncStatus('syncing');
+      try {
+        await dbService.deleteSessionVisits(sessionToDelete);
+        const updatedCustom = customSessions.filter((s) => s !== sessionToDelete);
+        setCustomSessions(updatedCustom);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('acl_custom_sessions', JSON.stringify(updatedCustom));
+        }
+        setVisits((prev) => prev.filter((v) => (v.session || getSessionForDate(v.visitDate)) !== sessionToDelete));
+
+        if (selectedSession === sessionToDelete) {
+          handleSelectSession('2026-2027');
+        }
+
+        setTimeout(() => setSyncStatus('synced'), 800);
+        alert(
+          language === 'en'
+            ? `Session "${sessionToDelete}" deleted successfully!`
+            : `सत्र "${sessionToDelete}" सफलतापूर्वक हटा दिया गया!`
+        );
+      } catch (e) {
+        console.error('Failed to delete session:', e);
+        setSyncStatus('synced');
+      }
+    }
+  };
+
+  const handleCopyToTargetSession = async (visit: SchoolVisit, targetSession: string) => {
+    const confirmMsg = language === 'en'
+      ? `Copy client "${visit.schoolName || 'N/A'}" (School Name, Contact & Strength) to Session (${targetSession})?`
+      : `क्या आप ग्राहक "${visit.schoolName || 'N/A'}" (स्कूल नाम, संपर्क और स्ट्रेंथ) को सत्र (${targetSession}) में कॉपी करना चाहते हैं?`;
+
+    if (window.confirm(confirmMsg)) {
+      setSyncStatus('syncing');
+      try {
+        const todayDate = new Date().toISOString().split('T')[0];
+
+        const newVisitData: Omit<SchoolVisit, 'id'> = {
+          schoolName: visit.schoolName || '',
+          city: visit.city || '',
+          address: visit.address || '',
+          range: visit.range || '',
+          contactPersonName: visit.contactPersonName || visit.schoolDetails?.principalName || '',
+          contactPhone: visit.contactPhone || visit.schoolDetails?.principalMobile || '',
+          contactEmail: visit.contactEmail || '',
+          schoolDetails: visit.schoolDetails,
+          idIncharge: visit.idIncharge,
+          reception: visit.reception,
+          classes: visit.classes,
+          cardTypes: visit.cardTypes,
+          category: visit.category || 'School',
+          visitDate: todayDate,
+          session: targetSession,
+          status: 'Pending',
+          createdByVendorId: visit.createdByVendorId,
+          createdByVendorName: visit.createdByVendorName,
+          notes: visit.notes ? `Transferred from session ${visit.session || '2026-2027'}. ${visit.notes}` : `Transferred from session ${visit.session || '2026-2027'}`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        const createdVisit = await dbService.saveVisit(newVisitData);
+        setVisits((prev) => [createdVisit, ...prev]);
+
+        if (!customSessions.includes(targetSession)) {
+          const updatedCustom = [...customSessions, targetSession];
+          setCustomSessions(updatedCustom);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('acl_custom_sessions', JSON.stringify(updatedCustom));
+          }
+        }
+
+        setTransferModalVisit(null);
+        setTimeout(() => setSyncStatus('synced'), 800);
+
+        const successMsg = language === 'en'
+          ? `Client "${visit.schoolName || 'N/A'}" successfully copied to session ${targetSession}!`
+          : `ग्राहक "${visit.schoolName || 'N/A'}" को सफलतापूर्वक सत्र ${targetSession} में कॉपी किया गया!`;
+        alert(successMsg);
+      } catch (e) {
+        console.error('Error copying visit to target session:', e);
+        setSyncStatus('synced');
+        alert(language === 'en' ? 'Failed to copy client.' : 'कॉपी करने में विफल।');
+      }
+    }
+  };
+
+  const handleTransferToNextSession = async (visit: SchoolVisit) => {
+    const currentCardSession = visit.session || getSessionForDate(visit.visitDate);
+    const nextSession = getNextSession(currentCardSession);
+
+    const confirmMsg = language === 'en'
+      ? `Transfer client "${visit.schoolName || 'N/A'}" (School Name, Contact & Strength) to Next Session (${nextSession})?`
+      : `क्या आप ग्राहक "${visit.schoolName || 'N/A'}" (स्कूल नाम, संपर्क और स्ट्रेंथ) को अगले सत्र (${nextSession}) में भेजना चाहते हैं?`;
+
+    if (window.confirm(confirmMsg)) {
+      setSyncStatus('syncing');
+      try {
+        const todayDate = new Date().toISOString().split('T')[0];
+
+        const newVisitData: Omit<SchoolVisit, 'id'> = {
+          schoolName: visit.schoolName || '',
+          city: visit.city || '',
+          address: visit.address || '',
+          range: visit.range || '',
+          contactPersonName: visit.contactPersonName || visit.schoolDetails?.principalName || '',
+          contactPhone: visit.contactPhone || visit.schoolDetails?.principalMobile || '',
+          contactEmail: visit.contactEmail || '',
+          schoolDetails: visit.schoolDetails,
+          idIncharge: visit.idIncharge,
+          reception: visit.reception,
+          classes: visit.classes,
+          cardTypes: visit.cardTypes,
+          category: visit.category || 'School',
+          visitDate: todayDate,
+          session: nextSession,
+          status: 'Pending',
+          createdByVendorId: visit.createdByVendorId,
+          createdByVendorName: visit.createdByVendorName,
+          notes: visit.notes ? `Transferred from session ${currentCardSession}. ${visit.notes}` : `Transferred from session ${currentCardSession}`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        const createdVisit = await dbService.saveVisit(newVisitData);
+        setVisits((prev) => [createdVisit, ...prev]);
+        setTimeout(() => setSyncStatus('synced'), 800);
+
+        const successMsg = language === 'en'
+          ? `Client "${visit.schoolName || 'N/A'}" successfully transferred to session ${nextSession}!`
+          : `ग्राहक "${visit.schoolName || 'N/A'}" को सफलतापूर्वक सत्र ${nextSession} में भेजा गया!`;
+        alert(successMsg);
+      } catch (e) {
+        console.error('Error transferring visit to next session:', e);
+        setSyncStatus('synced');
+        alert(language === 'en' ? 'Failed to transfer client.' : 'स्थानांतरित करने में विफल।');
+      }
+    }
+  };
+
   const handleApproveSave = async (updatedData: Partial<SchoolVisit>) => {
     if (!selectedVisit) return;
     setSyncStatus('syncing');
@@ -698,7 +885,7 @@ export default function Home() {
               style={{ cursor: 'pointer' }}
               onClick={() => { setTab('dashboard'); setSearchQuery(''); setSelectedVisit(null); }}
             >
-              ACL ID Manage
+              Market Manager
             </span>
 
             {/* Session Button Right to ACL ID Manage */}
@@ -750,35 +937,66 @@ export default function Home() {
                       Academic Session
                     </div>
                     {availableSessions.map((sess) => (
-                      <button
+                      <div
                         key={sess}
-                        onClick={() => {
-                          handleSelectSession(sess);
-                          setIsSessionDropdownOpen(false);
-                        }}
                         style={{
-                          textAlign: 'left',
-                          padding: '8px 12px',
-                          fontSize: '12px',
-                          fontWeight: selectedSession === sess ? 700 : 500,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '6px 10px',
+                          borderRadius: '8px',
                           backgroundColor: selectedSession === sess ? 'rgba(79, 70, 229, 0.1)' : 'transparent',
                           color: selectedSession === sess ? 'var(--primary)' : 'var(--text-primary)',
-                          border: 'none',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          width: '100%'
                         }}
                       >
-                        <span>📅 {sess}</span>
-                        {sess === currentAutomaticSession && (
-                          <span style={{ fontSize: '9px', backgroundColor: '#d1fae5', color: '#047857', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
-                            Active
-                          </span>
+                        <button
+                          onClick={() => {
+                            handleSelectSession(sess);
+                            setIsSessionDropdownOpen(false);
+                          }}
+                          style={{
+                            textAlign: 'left',
+                            fontSize: '12px',
+                            fontWeight: selectedSession === sess ? 700 : 500,
+                            backgroundColor: 'transparent',
+                            color: 'inherit',
+                            border: 'none',
+                            cursor: 'pointer',
+                            flex: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          <span>📅 {sess}</span>
+                          {sess === currentAutomaticSession && (
+                            <span style={{ fontSize: '9px', backgroundColor: '#d1fae5', color: '#047857', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
+                              Active
+                            </span>
+                          )}
+                        </button>
+                        {isAdminMode && sess !== '2026-2027' && (
+                          <button
+                            type="button"
+                            title={language === 'en' ? 'Delete session' : 'सत्र हटाएं'}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteSession(sess);
+                            }}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#ef4444',
+                              fontSize: '13px',
+                              cursor: 'pointer',
+                              padding: '2px 6px',
+                              borderRadius: '4px'
+                            }}
+                          >
+                            🗑️
+                          </button>
                         )}
-                      </button>
+                      </div>
                     ))}
                     <div style={{ borderTop: '1px solid var(--border-color)', marginTop: '4px', paddingTop: '4px' }}>
                       <button
@@ -1630,7 +1848,7 @@ export default function Home() {
                                 ▼
                               </span>
                               <span className="visit-card-name" style={{ fontWeight: 800, fontSize: '16px', color: 'var(--text-primary)' }}>
-                                {visit.schoolName}
+                                {visit.schoolName || 'N/A'}
                               </span>
                             </div>
                             <span className={`badge ${visit.status === 'Approved'
@@ -1801,202 +2019,94 @@ export default function Home() {
                             {/* Action Buttons directly in card */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '10px', marginTop: '8px' }}>
                               
-                              {visit.status === 'Pending' && (
-                                <>
-                                  <div style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-primary)', marginBottom: '6px', fontWeight: 600 }}>
-                                    {language === 'en' ? (
-                                      <>Visit scheduled for <strong>{formatDate(visit.visitDate)}</strong>.</>
-                                    ) : (
-                                      <><strong>{formatDate(visit.visitDate)}</strong> के लिए मुलाकात निर्धारित है।</>
-                                    )}
-                                  </div>
-                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedVisit(visit);
-                                        setIsRejecting(true);
-                                      }}
-                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#dc2626', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
-                                    >
-                                      ❌ {t.decline}
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedVisit(visit);
-                                        setIsApproving(true);
-                                      }}
-                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#16a34a', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
-                                    >
-                                      ✅ {t.confirmClient}
-                                    </button>
-                                  </div>
-                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '6px' }}>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedVisit(visit);
-                                        setIsSchedulingFollowUp(true);
-                                      }}
-                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
-                                    >
-                                      ⏰ {language === 'en' ? 'Follow-Up' : 'फॉलो-अप'}
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedVisit(visit);
-                                        setIsApproving(true);
-                                      }}
-                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
-                                    >
-                                      ✏️ {language === 'en' ? 'Edit' : 'संपादित करें'}
-                                    </button>
-                                  </div>
-                                  {isAdminMode && (
-                                    <div style={{ marginTop: '6px' }}>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (window.confirm(language === 'en' ? 'Are you sure you want to delete this client?' : 'क्या आप वाकई इस ग्राहक को हटाना चाहते हैं?')) {
-                                            handleDeleteVisit(visit.id);
-                                          }
-                                        }}
-                                        style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', width: '100%', backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', borderRadius: '8px', cursor: 'pointer' }}
-                                      >
-                                        🗑️ {language === 'en' ? 'Delete' : 'हटाएं'}
-                                      </button>
-                                    </div>
-                                  )}
-                                </>
-                              )}
+                              {/* Row 1: Decline vs Confirm/Pending button */}
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedVisit(visit);
+                                    setIsRejecting(true);
+                                  }}
+                                  style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#dc2626', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                                >
+                                  ❌ {t.decline}
+                                </button>
 
-                              {visit.status === 'FollowUp' && (
-                                <>
-                                  <div style={{ textAlign: 'center', fontSize: '13px', color: '#1e40af', marginBottom: '6px', fontWeight: 700 }}>
-                                    {language === 'en' ? 'Follow-Up Scheduled' : 'फॉलो-अप निर्धारित है'}
-                                  </div>
-                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedVisit(visit);
-                                        setIsRejecting(true);
-                                      }}
-                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#dc2626', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
-                                    >
-                                      ❌ {t.decline}
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedVisit(visit);
-                                        setIsApproving(true);
-                                      }}
-                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#16a34a', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
-                                    >
-                                      ✅ {t.confirmClient}
-                                    </button>
-                                  </div>
-                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '6px' }}>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedVisit(visit);
-                                        setIsSchedulingFollowUp(true);
-                                      }}
-                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
-                                    >
-                                      ⏰ {language === 'en' ? 'Reschedule' : 'रीशेड्यूल'}
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedVisit(visit);
-                                        setIsApproving(true);
-                                      }}
-                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
-                                    >
-                                      ✏️ {language === 'en' ? 'Edit' : 'संपादित करें'}
-                                    </button>
-                                  </div>
-                                  {isAdminMode && (
-                                    <div style={{ marginTop: '6px' }}>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (window.confirm(language === 'en' ? 'Are you sure you want to delete this client?' : 'क्या आप वाकई इस ग्राहक को हटाना चाहते हैं?')) {
-                                            handleDeleteVisit(visit.id);
-                                          }
-                                        }}
-                                        style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', width: '100%', backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', borderRadius: '8px', cursor: 'pointer' }}
-                                      >
-                                        🗑️ {language === 'en' ? 'Delete' : 'हटाएं'}
-                                      </button>
-                                    </div>
-                                  )}
-                                </>
-                              )}
-
-                              {visit.status === 'Rejected' && (
-                                <div style={{ display: 'grid', gridTemplateColumns: isAdminMode ? '1fr 1fr' : '1fr', gap: '8px' }}>
+                                {visit.status === 'Approved' ? (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setSelectedVisit(visit);
-                                      setIsApproving(true);
+                                      handleMoveToPending(visit);
                                     }}
-                                    style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                                    style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#eab308', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
                                   >
-                                    ✏️ {language === 'en' ? 'Edit / Re-consider' : 'संपादित करें / फिर सोचें'}
+                                    🟡 {language === 'en' ? 'Move to Pending' : 'लंबित में बदलें'}
                                   </button>
-                                  {isAdminMode && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (window.confirm(language === 'en' ? 'Are you sure you want to delete this client?' : 'क्या आप वाकई इस ग्राहक को हटाना चाहते हैं?')) {
-                                          handleDeleteVisit(visit.id);
-                                        }
-                                      }}
-                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', borderRadius: '8px', cursor: 'pointer' }}
-                                    >
-                                      🗑️ {language === 'en' ? 'Delete' : 'हटाएं'}
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-
-                              {visit.status === 'Approved' && (
-                                <div style={{ display: 'grid', gridTemplateColumns: isAdminMode ? '1fr 1fr' : '1fr', gap: '8px' }}>
+                                ) : (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setSelectedVisit(visit);
-                                      setIsApproving(true);
+                                      handleDirectConfirm(visit);
                                     }}
-                                    style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                                    style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#16a34a', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
                                   >
-                                    ✏️ {language === 'en' ? 'Edit' : 'संपादित करें'}
+                                    ✅ {t.confirmClient}
                                   </button>
-                                  {isAdminMode && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (window.confirm(language === 'en' ? 'Are you sure you want to delete this client?' : 'क्या आप वाकई इस ग्राहक को हटाना चाहते हैं?')) {
-                                          handleDeleteVisit(visit.id);
-                                        }
-                                      }}
-                                      style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', borderRadius: '8px', cursor: 'pointer' }}
-                                    >
-                                      🗑️ {language === 'en' ? 'Delete' : 'हटाएं'}
-                                    </button>
-                                  )}
+                                )}
+                              </div>
+
+                              {/* Row 2: Follow-Up vs Edit */}
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedVisit(visit);
+                                    setIsSchedulingFollowUp(true);
+                                  }}
+                                  style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                                >
+                                  ⏰ {visit.status === 'FollowUp' ? (language === 'en' ? 'Reschedule' : 'रीशेड्यूल') : (language === 'en' ? 'Follow-Up' : 'फॉलो-अप')}
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedVisit(visit);
+                                    setIsApproving(true);
+                                  }}
+                                  style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                                >
+                                  ✏️ {language === 'en' ? 'Edit' : 'संपादित करें'}
+                                </button>
+                              </div>
+
+                              {/* Row 3: Move to Next Session & Delete (Admin Mode) */}
+                              {isAdminMode && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setTransferModalVisit(visit);
+                                    }}
+                                    style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', width: '100%', backgroundColor: 'rgba(99, 102, 241, 0.15)', border: '1px solid rgba(99, 102, 241, 0.3)', color: '#818cf8', borderRadius: '8px', cursor: 'pointer' }}
+                                  >
+                                    🚀 {language === 'en' 
+                                      ? `Move to Session...` 
+                                      : `सत्र में भेजें...`}
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (window.confirm(language === 'en' ? 'Are you sure you want to delete this client?' : 'क्या आप वाकई इस ग्राहक को हटाना चाहते हैं?')) {
+                                        handleDeleteVisit(visit.id);
+                                      }
+                                    }}
+                                    style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', width: '100%', backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', borderRadius: '8px', cursor: 'pointer' }}
+                                  >
+                                    🗑️ {language === 'en' ? 'Delete' : 'हटाएं'}
+                                  </button>
                                 </div>
                               )}
-
                             </div>
-
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '8px', marginTop: '8px' }}>
                               {visit.createdByVendorName ? (
                                 <span style={{ backgroundColor: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>
@@ -2258,31 +2368,77 @@ export default function Home() {
                             </div>
 
                             {/* Action Buttons directly in confirmed card */}
-                            <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '10px', marginTop: '8px' }}>
-                              <button
-                                className="btn btn-primary"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedVisit(visit);
-                                  setIsApproving(true);
-                                }}
-                                style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', flex: 1, backgroundColor: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
-                              >
-                                ✏️ {language === 'en' ? 'Edit' : 'संपादित करें'}
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (window.confirm(language === 'en' ? 'Are you sure you want to delete this client?' : 'क्या आप वाकई इस ग्राहक को हटाना चाहते हैं?')) {
-                                    handleDeleteVisit(visit.id);
-                                  }
-                                }}
-                                style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', flex: 1, backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', borderRadius: '8px', cursor: 'pointer' }}
-                              >
-                                🗑️ {language === 'en' ? 'Delete' : 'हटाएं'}
-                              </button>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '10px', marginTop: '8px' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleMoveToPending(visit);
+                                  }}
+                                  style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#eab308', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                                >
+                                  🟡 {language === 'en' ? 'Move to Pending' : 'लंबित में बदलें'}
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedVisit(visit);
+                                    setIsRejecting(true);
+                                  }}
+                                  style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#dc2626', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                                >
+                                  ❌ {t.decline}
+                                </button>
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedVisit(visit);
+                                    setIsSchedulingFollowUp(true);
+                                  }}
+                                  style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                                >
+                                  ⏰ {language === 'en' ? 'Follow-Up' : 'फॉलो-अप'}
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedVisit(visit);
+                                    setIsApproving(true);
+                                  }}
+                                  style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                                >
+                                  ✏️ {language === 'en' ? 'Edit' : 'संपादित करें'}
+                                </button>
+                              </div>
+                              {isAdminMode && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setTransferModalVisit(visit);
+                                    }}
+                                    style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', width: '100%', backgroundColor: 'rgba(99, 102, 241, 0.15)', border: '1px solid rgba(99, 102, 241, 0.3)', color: '#818cf8', borderRadius: '8px', cursor: 'pointer' }}
+                                  >
+                                    🚀 {language === 'en' 
+                                      ? `Move to Session...` 
+                                      : `सत्र में भेजें...`}
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (window.confirm(language === 'en' ? 'Are you sure you want to delete this client?' : 'क्या आप वाकई इस ग्राहक को हटाना चाहते हैं?')) {
+                                        handleDeleteVisit(visit.id);
+                                      }
+                                    }}
+                                    style={{ height: '36px', fontSize: '12px', fontWeight: 600, padding: '0 8px', backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', borderRadius: '8px', cursor: 'pointer' }}
+                                  >
+                                    🗑️ {language === 'en' ? 'Delete' : 'हटाएं'}
+                                  </button>
+                                </div>
+                              )}
                             </div>
-
                           </div>
                         )}
                       </div>
@@ -2294,35 +2450,6 @@ export default function Home() {
                   {t.noConfirmedSaved}
                 </div>
               )}
-            </>
-          )}
-
-          {currentTab === 'analysis' && (
-            <>
-              {/* Sticky Header */}
-              <div className="search-container">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <button
-                    className="btn btn-danger"
-                    style={{
-                      width: 'auto',
-                      padding: '8px 16px',
-                      fontSize: '14px',
-                      fontWeight: 700,
-                      backgroundColor: '#ef4444',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '12px',
-                      boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)',
-                      cursor: 'pointer'
-                    }}
-                    onClick={() => { setTab('dashboard'); setActiveCategory(null); }}
-                  >
-                    ← {t.back}
-                  </button>
-                  <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>{t.clientAnalysis}</h3>
-                </div>
-              </div>
 
               <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {/* Stats Overview */}
@@ -2812,6 +2939,82 @@ export default function Home() {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          
+          {/* Target Session Selection Modal Overlay */}
+          {transferModalVisit && (
+            <div className="modal-overlay" onClick={() => setTransferModalVisit(null)} style={{ zIndex: 12000 }}>
+              <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 className="form-title" style={{ margin: 0, fontSize: '16px' }}>
+                    🚀 {language === 'en' ? 'Copy to Target Session' : 'लक्ष्य सत्र में कॉपी करें'}
+                  </h3>
+                  <button
+                    onClick={() => setTransferModalVisit(null)}
+                    style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '18px', cursor: 'pointer' }}
+                  >
+                    ✖
+                  </button>
+                </div>
+
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '14px' }}>
+                  {language === 'en'
+                    ? `Select which session to copy "${transferModalVisit.schoolName || 'N/A'}" (School Name, Contact & Strength) into:`
+                    : `किस सत्र में "${transferModalVisit.schoolName || 'N/A'}" (नाम, संपर्क और स्ट्रेंथ) कॉपी करना चाहते हैं चुनें:`}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '260px', overflowY: 'auto' }}>
+                  {availableSessions.map((sess) => (
+                    <button
+                      key={sess}
+                      onClick={() => handleCopyToTargetSession(transferModalVisit, sess)}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '12px 14px',
+                        borderRadius: '10px',
+                        backgroundColor: 'rgba(255,255,255,0.03)',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-primary)',
+                        fontWeight: 600,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        textAlign: 'left'
+                      }}
+                    >
+                      <span>📅 {sess}</span>
+                      <span style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: 700 }}>Select ➔</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '10px' }}>
+                  <button
+                    onClick={() => {
+                      const input = window.prompt(
+                        language === 'en' ? 'Enter target Academic Session (e.g. 2028-2029):' : 'लक्ष्य सत्र दर्ज करें (उदा. 2028-2029):',
+                        '2028-2029'
+                      );
+                      if (input && input.trim()) {
+                        handleCopyToTargetSession(transferModalVisit, input.trim());
+                      }
+                    }}
+                    style={{ flex: 1, padding: '10px', borderRadius: '10px', backgroundColor: 'rgba(79, 70, 229, 0.15)', border: '1px solid rgba(79, 70, 229, 0.3)', color: 'var(--primary)', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+                  >
+                    ➕ {language === 'en' ? 'Create & Select New Session' : 'नया सत्र बनाएं और चुनें'}
+                  </button>
+                  <button
+                    onClick={() => setTransferModalVisit(null)}
+                    className="btn btn-secondary"
+                    style={{ padding: '10px 16px' }}
+                  >
+                    {t.cancel}
+                  </button>
+                </div>
               </div>
             </div>
           )}
