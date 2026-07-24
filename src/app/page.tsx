@@ -260,6 +260,105 @@ export default function Home() {
     }
   };
 
+  
+  // Back button (Android / Chrome browser history) interceptor to prevent closing website
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const isAnyOverlayActive =
+      isAddingVisit ||
+      !!selectedVisit ||
+      isApproving ||
+      isRejecting ||
+      isSchedulingFollowUp ||
+      !!transferModalVisit ||
+      isAddingVendor ||
+      isLoginModalOpen ||
+      isCityPickerOpen ||
+      isUserFilterOpen ||
+      isSessionDropdownOpen ||
+      !!activeCategory ||
+      currentTab !== 'dashboard';
+
+    if (isAnyOverlayActive) {
+      window.history.pushState({ modalOpen: true }, '');
+    }
+
+    const handlePopState = () => {
+      if (isCityPickerOpen) {
+        setIsCityPickerOpen(false);
+        return;
+      }
+      if (isUserFilterOpen) {
+        setIsUserFilterOpen(false);
+        return;
+      }
+      if (isSessionDropdownOpen) {
+        setIsSessionDropdownOpen(false);
+        return;
+      }
+      if (transferModalVisit) {
+        setTransferModalVisit(null);
+        return;
+      }
+      if (isAddingVisit) {
+        setIsAddingVisit(false);
+        return;
+      }
+      if (isApproving) {
+        setIsApproving(false);
+        return;
+      }
+      if (isRejecting) {
+        setIsRejecting(false);
+        return;
+      }
+      if (isSchedulingFollowUp) {
+        setIsSchedulingFollowUp(false);
+        return;
+      }
+      if (selectedVisit) {
+        setSelectedVisit(null);
+        return;
+      }
+      if (isAddingVendor) {
+        setIsAddingVendor(false);
+        return;
+      }
+      if (isLoginModalOpen) {
+        setIsLoginModalOpen(false);
+        return;
+      }
+      if (activeCategory) {
+        setActiveCategory(null);
+        return;
+      }
+      if (currentTab !== 'dashboard') {
+        setTab('dashboard');
+        return;
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [
+    isAddingVisit,
+    selectedVisit,
+    isApproving,
+    isRejecting,
+    isSchedulingFollowUp,
+    transferModalVisit,
+    isAddingVendor,
+    isLoginModalOpen,
+    isCityPickerOpen,
+    isUserFilterOpen,
+    isSessionDropdownOpen,
+    activeCategory,
+    currentTab
+  ]);
+
   useEffect(() => {
     loadVisits();
     loadVendors();
